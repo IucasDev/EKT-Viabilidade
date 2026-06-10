@@ -328,11 +328,57 @@ input[type="time"]::-webkit-calendar-picker-indicator{cursor:pointer;filter:opac
             </div>
             <div class="cg">
               <label class="cl">Novo SIGFI</label>
-              <select class="cs" name="sigfi_alteracao">
+              <select class="cs" name="sigfi_alteracao" id="sigfi_alteracao_sel">
                 <option value="">Selecionar...</option>
                 <option>30</option><option>45</option><option>60</option><option>80</option><option>120</option><option>180</option>
               </select>
             </div>
+
+            <!-- ═══ CALCULADORA DE ORÇAMENTO SIGFI ═══ -->
+            <div id="calc-sigfi-box" style="background:#fff;border:1.5px solid #fed7aa;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;">
+              <div style="font-family:var(--mono);font-size:.68rem;font-weight:700;color:#92400e;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #fde68a;padding-bottom:5px;margin-bottom:2px">
+                💰 Orçamento SIGFI
+              </div>
+
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <button type="button" id="btn-calc-sigfi"
+                  style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-family:var(--font);font-size:.78rem;font-weight:700;cursor:pointer;transition:all .13s;white-space:nowrap"
+                  onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'"
+                  onclick="calcularOrcamentoSIGFI()">
+                  Calcular Orçamento
+                </button>
+                <span style="font-size:.68rem;color:#92400e;font-style:italic">
+                  Usa os campos Ligação Nova FV, SIGFI Atual e Novo SIGFI acima
+                </span>
+              </div>
+
+              <!-- Resultado -->
+              <div id="sigfi-resultado" style="display:none;flex-direction:column;gap:6px;">
+                <div id="sigfi-status-badge" style="text-align:center;padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:.82rem;font-weight:700;letter-spacing:.5px;"></div>
+                <div id="sigfi-detalhes" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;font-size:.8rem;">
+                  <table style="width:100%;border-collapse:collapse;">
+                    <tr style="border-bottom:1px solid #e2e8f0">
+                      <td style="padding:5px 4px;color:#64748b;font-weight:600">Mão de obra — Retirada</td>
+                      <td id="val-mo-ret" style="padding:5px 4px;text-align:right;font-family:var(--mono);font-weight:700;color:#0f172a"></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e2e8f0">
+                      <td style="padding:5px 4px;color:#64748b;font-weight:600">Mão de obra — Instalação</td>
+                      <td id="val-mo-inst" style="padding:5px 4px;text-align:right;font-family:var(--mono);font-weight:700;color:#0f172a"></td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e2e8f0">
+                      <td style="padding:5px 4px;color:#64748b;font-weight:600">Material</td>
+                      <td id="val-material" style="padding:5px 4px;text-align:right;font-family:var(--mono);font-weight:700;color:#0f172a"></td>
+                    </tr>
+                    <tr style="background:#f0fdf4;">
+                      <td style="padding:6px 4px;font-weight:800;color:#15803d;font-size:.85rem">TOTAL</td>
+                      <td id="val-total" style="padding:6px 4px;text-align:right;font-family:var(--mono);font-weight:800;color:#15803d;font-size:.9rem"></td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- ═══ FIM CALCULADORA ═══ -->
+
             <table class="tsigfi">
               <thead><tr><th>SIGFI</th><th>kVA</th><th>kW Máx</th></tr></thead>
               <tbody>
@@ -943,6 +989,87 @@ document.querySelectorAll('.periodo-toggle .btn-toggle').forEach(function(btn) {
 });
 
 // ── TELEFONE — só números, foco automático ──
+// ── CALCULADORA DE ORÇAMENTO SIGFI ──────────────────────────────────────────
+function formatarMoedaBR(valor) {
+  return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+var MO_RETIRADA    = { 30: 1023.17, 80: 1151.00, 120: 1278.97, 180: 1278.97 };
+var MO_INSTALACAO  = { 80: 6020.61, 120: 7129.66, 180: 8070.83 };
+var MATERIAL_INST  = { 80: 27386.28, 120: 34268.51, 180: 48494.16 };
+var BASE_SIGFI_PU  = [30, 80];   // PU = sem custo
+var BASE_SIGFI_PC  = [120, 180]; // PC = com custo
+
+function calcularOrcamentoSIGFI() {
+  // Lê tipo de solicitação: ligacao_nova_fv (sim/nao/na) + alteracao_carga_fv
+  var tipoLN  = document.querySelector('input[name="ligacao_nova_fv"]:checked');
+  var tipoAlt = document.querySelector('input[name="alteracao_carga_fv"]:checked');
+  var sigfiAtual   = document.querySelector('[name="sigfi_atual"]')?.value || '';
+  var sigfiPedido  = document.querySelector('[name="sigfi_alteracao"]')?.value || '';
+
+  var resultado   = document.getElementById('sigfi-resultado');
+  var badge       = document.getElementById('sigfi-status-badge');
+  var detalhes    = document.getElementById('sigfi-detalhes');
+
+  resultado.style.display = 'flex';
+
+  // Validações
+  if (!sigfiPedido || sigfiPedido === '') {
+    badge.textContent = '⚠️ Selecione o Novo SIGFI acima';
+    badge.style.background = '#fef9c3'; badge.style.color = '#92400e';
+    detalhes.style.display = 'none';
+    return;
+  }
+
+  var pedidoNum = parseInt(sigfiPedido);
+  var atualNum  = parseInt(sigfiAtual) || 0;
+
+  // Ligação Nova → sempre sem custo
+  var ehLigacaoNova = (tipoLN && tipoLN.value === 'sim') || sigfiAtual === 'Ligação Nova';
+  if (ehLigacaoNova) {
+    badge.textContent = '✅ SEM CUSTO AO CLIENTE — Ligação Nova';
+    badge.style.background = '#f0fdf4'; badge.style.color = '#15803d';
+    badge.style.border = '1px solid #bbf7d0';
+    detalhes.style.display = 'none';
+    return;
+  }
+
+  // SIGFI pedido PU → sem custo
+  if (BASE_SIGFI_PU.includes(pedidoNum)) {
+    badge.textContent = '✅ SEM CUSTO AO CLIENTE — SIGFI ' + pedidoNum + ' (PU)';
+    badge.style.background = '#f0fdf4'; badge.style.color = '#15803d';
+    badge.style.border = '1px solid #bbf7d0';
+    detalhes.style.display = 'none';
+    return;
+  }
+
+  // SIGFI pedido PC → calcula
+  if (BASE_SIGFI_PC.includes(pedidoNum)) {
+    var moRet    = MO_RETIRADA[atualNum]   || 0;
+    var moInst   = MO_INSTALACAO[pedidoNum] || 0;
+    var material = MATERIAL_INST[pedidoNum] || 0;
+    var total    = moRet + moInst + material;
+
+    badge.textContent = '💰 COM CUSTO AO CLIENTE — SIGFI ' + pedidoNum + ' (PC)';
+    badge.style.background = '#fef2f2'; badge.style.color = '#dc2626';
+    badge.style.border = '1px solid #fecaca';
+
+    document.getElementById('val-mo-ret').textContent   = formatarMoedaBR(moRet);
+    document.getElementById('val-mo-inst').textContent  = formatarMoedaBR(moInst);
+    document.getElementById('val-material').textContent = formatarMoedaBR(material);
+    document.getElementById('val-total').textContent    = formatarMoedaBR(total);
+    detalhes.style.display = 'block';
+    return;
+  }
+
+  // SIGFI inválido
+  badge.textContent = '⚠️ SIGFI ' + sigfiPedido + ' não reconhecido para orçamento';
+  badge.style.background = '#fef9c3'; badge.style.color = '#92400e';
+  badge.style.border = '1px solid #fde68a';
+  detalhes.style.display = 'none';
+}
+// ── FIM CALCULADORA SIGFI ────────────────────────────────────────────────────
+
 document.querySelectorAll('.ci-ddd').forEach(function(ddd) {
   ddd.addEventListener('input', function() {
     this.value = this.value.replace(/\D/g, '').slice(0, 2);
