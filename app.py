@@ -1,1470 +1,379 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>EKT — Formulário de Viabilidade</title>
-<link rel="manifest" href="./manifest.json">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+import streamlit as st
+import streamlit.components.v1 as components
+import math
+from pathlib import Path
 
+st.set_page_config(
+    page_title="Sistema EKT — Viabilidade & Esforços",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# Remove margens do Streamlit + estilo das abas
+st.markdown("""
 <style>
-:root{
-  --verde:#16a34a;--verde-e:#15803d;--verde-c:#22c55e;--verde-bg:#f0fdf4;--verde-borda:#bbf7d0;
-  --amarelo:#d97706;--amarelo-bg:#fffbeb;--amarelo-bd:#fde68a;
-  --verm:#dc2626;--verm-bg:#fef2f2;--verm-bd:#fecaca;--verm-c:#ef4444;
-  --bg:#f8fafc;--surface:#ffffff;--border:#e2e8f0;--border2:#cbd5e1;
-  --t1:#0f172a;--t2:#334155;--t3:#64748b;--t4:#94a3b8;
-  --r:8px;--font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
-  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
-  --shadow-md:0 4px 12px rgba(0,0,0,.08);
-  /* MAPA MENTAL — cores de bloco */
-  --bloco-a-bg:#f0fdf4;   /* verde claro — Identificação, Linha Viva, Ambiental */
-  --bloco-a-borda:#86efac;
-  --bloco-b-bg:#eff6ff;   /* azul claro — Executar Obra, Logística, Checklist, Projeto */
-  --bloco-b-borda:#93c5fd;
-  /* FV — laranja âmbar */
-  --fv-bg:#fffbeb;--fv-borda:#fde68a;--fv-header:#92400e;
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;700&display=swap');
+
+html, body, [class*="css"] { font-family: 'Barlow', sans-serif; }
+.block-container { padding-top: 0 !important; padding-bottom: 0 !important; max-width: 100% !important; }
+header[data-testid="stHeader"] { display: none; }
+.stDeployButton { display: none; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+
+/* Cabeçalho EKT */
+.ekt-header {
+    background: linear-gradient(135deg, #0d4425 0%, #0d1117 100%);
+    border-bottom: 3px solid #22c55e;
+    padding: 14px 24px 12px;
+    display: flex; align-items: center; gap: 14px;
+    margin: -1rem -1rem 0;
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:16px}
-body{font-family:var(--font);background:var(--bg);color:var(--t2);min-height:100vh;line-height:1.5}
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--t4)}
+.ekt-header h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.6rem; font-weight: 800; color: #4ade80;
+    margin: 0; letter-spacing: 2px; text-transform: uppercase;
+}
+.ekt-header .sub { font-size: 0.72rem; color: #94a3b8; margin-top: 2px; }
+.badge-rev {
+    background: #334155; color: #94a3b8;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.65rem; padding: 2px 8px; border-radius: 20px;
+    border: 1px solid #475569; letter-spacing: 0.5px;
+}
 
-/* HEADER */
-header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
-.hlogo{font-family:var(--mono);font-size:1rem;font-weight:500;color:var(--verde);letter-spacing:.5px;white-space:nowrap;display:flex;align-items:center;gap:6px}
-.hlogo-dot{width:8px;height:8px;background:var(--verde-c);border-radius:50%;display:inline-block}
-.hsub{font-size:.72rem;color:var(--t3);margin-top:1px}
-.hacoes{display:flex;gap:7px;margin-left:auto;align-items:center;flex-wrap:wrap}
-#status-conexao{font-size:.68rem;padding:3px 10px;border-radius:20px;font-weight:600}
-.status-online{background:var(--verde-bg);color:var(--verde-e);border:1px solid var(--verde-borda)}
-.status-offline{background:var(--verm-bg);color:var(--verm);border:1px solid var(--verm-bd)}
+/* Abas customizadas */
+div[data-testid="stTabs"] button {
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 0.95rem !important; font-weight: 700 !important;
+    letter-spacing: 0.5px !important; text-transform: uppercase !important;
+}
 
-/* BOTÕES */
-.btn{font-family:var(--font);font-size:.78rem;font-weight:700;padding:7px 14px;border:none;border-radius:var(--r);cursor:pointer;transition:all .14s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
-.btn-verde{background:var(--verde);color:#fff}.btn-verde:hover{background:var(--verde-e)}
-.btn-am{background:var(--amarelo);color:#fff}.btn-am:hover{background:#b45309}
-.btn-az{background:#2563eb;color:#fff}.btn-az:hover{background:#1d4ed8}
-.btn-cz{background:var(--surface);color:var(--t2);border:1px solid var(--border2)}.btn-cz:hover{background:var(--bg)}
-.btn-sm{font-size:.7rem;padding:4px 9px;border-radius:5px}
-.btn-carregar{background:var(--verde);color:#fff}
-.btn-pdf{background:#92400e;color:#fff}
-.btn-deletar{background:var(--verm);color:#fff}
-
-/* LAYOUT DOIS BLOCOS — MAPA MENTAL */
-.wrap{padding:12px 14px;max-width:1800px;margin:0 auto}
-.dois-blocos{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
-@media(max-width:900px){.dois-blocos{grid-template-columns:1fr}}
-
-/* Bloco mapa mental */
-.bloco{border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
-.bloco-esq{background:var(--bloco-a-bg);border:2px solid var(--bloco-a-borda)}
-.bloco-dir{background:var(--bloco-b-bg);border:2px solid var(--bloco-b-borda)}
-.bloco-titulo{font-family:var(--mono);font-size:.7rem;font-weight:500;color:var(--t3);text-transform:uppercase;letter-spacing:1px;padding:2px 4px;margin-bottom:2px}
-
-/* Grid interno de cards dentro de cada bloco */
-.cards-grid{display:grid;gap:10px}
-.cards-grid-1{grid-template-columns:1fr}
-.cards-grid-2{grid-template-columns:1fr 1fr}
-.cards-grid-3{grid-template-columns:1fr 1fr 1fr}
-@media(max-width:700px){.cards-grid-2,.cards-grid-3{grid-template-columns:1fr}}
-
-/* CARD */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);transition:box-shadow .2s}
-.card:hover{box-shadow:0 4px 16px rgba(0,0,0,.09)}
-.ch{background:var(--verde-bg);padding:8px 11px;font-size:.78rem;font-weight:700;color:var(--verde-e);border-bottom:1px solid var(--verde-borda);display:flex;align-items:center;gap:6px}
-.ch-sub{background:#f8fafc;padding:5px 11px;font-size:.7rem;font-weight:700;color:var(--t3);letter-spacing:.3px;border-bottom:1px solid var(--border);margin:0 -10px;text-transform:uppercase}
-.cb{padding:10px;display:flex;flex-direction:column;gap:7px}
-
-/* CAMPOS */
-.cg{display:flex;flex-direction:column;gap:3px}
-.cl{font-size:.68rem;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.4px}
-.ci,.cs,.cta{background:var(--bg);border:1px solid var(--border);color:var(--t1);border-radius:6px;padding:6px 9px;font-family:var(--font);font-size:.82rem;font-weight:600;transition:border-color .14s,box-shadow .14s;width:100%;text-transform:uppercase}
-.ci:focus,.cs:focus,.cta:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-.cta{resize:vertical;min-height:64px}
-.cs option{background:var(--surface);color:var(--t1)}
-input[name="codigo_projeto"]{background:#fffbeb;color:#92400e;font-weight:700;font-family:var(--mono);border-color:#fde68a;font-size:.85rem}
-
-/* TELEFONE */
-.tel-row{display:flex;gap:5px;align-items:center}
-.ci-ddd{width:52px;min-width:52px;text-align:center;font-weight:700;font-family:var(--mono)}
-.ci-tel{flex:1}
-
-/* SIM/NÃO */
-.csn{display:flex;flex-direction:column;gap:3px}
-.snb{display:flex;gap:4px}
-.snb input[type=radio]{display:none}
-.snb label{flex:1;text-align:center;padding:5px 0;border-radius:5px;font-family:var(--font);font-size:.75rem;font-weight:700;cursor:pointer;transition:all .13s;border:1px solid}
-.snb .ls{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
-.snb .ln{background:#fef2f2;border-color:#fecaca;color:#dc2626}
-.snb .lna{background:#f1f5f9;border-color:#cbd5e1;color:var(--t3)}
-.snb input[value=sim]:checked+label.ls{background:var(--verde);color:#fff;border-color:var(--verde);box-shadow:0 2px 8px rgba(22,163,74,.25)}
-.snb input[value=nao]:checked+label.ln{background:var(--verm);color:#fff;border-color:var(--verm);box-shadow:0 2px 8px rgba(220,38,38,.2)}
-.snb input[value=na]:checked+label.lna{background:#475569;color:#fff;border-color:#475569}
-
-/* LINHA VIVA */
-.lv-destaque{border:1.5px solid #fca5a5!important;background:#fff5f5!important;border-radius:6px;padding:5px 6px}
-.lv-label{color:#dc2626!important;font-weight:700!important}
-.lv-badge{background:var(--verm);color:#fff;font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:20px;letter-spacing:.4px;margin-left:5px}
-.snb .ls-lv{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
-.snb input[value=sim]:checked+label.ls-lv{background:var(--verm);color:#fff;border-color:var(--verm);box-shadow:0 2px 8px rgba(220,38,38,.3)}
-
-/* QTD — só número, sem seletor */
-.ci-qtd-only{background:var(--bg);border:1px solid var(--border);color:var(--t1);border-radius:6px;padding:6px 9px;font-family:var(--mono);font-size:.9rem;font-weight:700;width:100%;text-align:center}
-.ci-qtd-only:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-
-/* RADIO HORIZONTAL */
-.rg{display:flex;flex-wrap:wrap;gap:5px}
-.rg input[type=radio]{display:none}
-.rg label{padding:4px 10px;border-radius:5px;font-size:.73rem;font-weight:700;cursor:pointer;background:var(--bg);color:var(--t3);border:1px solid var(--border);transition:all .13s}
-.rg input[type=radio]:checked+label{background:var(--amarelo);color:#fff;border-color:var(--amarelo)}
-
-/* TENSÃO — par mutuamente exclusivo inline */
-.tensao-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.tensao-item{display:flex;align-items:center;gap:5px}
-.tensao-item label.tl{font-size:.72rem;font-weight:700;color:var(--t2);white-space:nowrap}
-.tensao-item input[type=checkbox]{width:18px;height:18px;accent-color:var(--verde);cursor:pointer}
-
-/* TABELA SIGFI */
-.tsigfi{width:100%;border-collapse:collapse;font-size:.7rem;margin-top:2px}
-.tsigfi th{background:var(--verde-bg);color:var(--verde-e);padding:5px;text-align:center;font-weight:700;border:1px solid var(--verde-borda)}
-.tsigfi td{padding:4px 5px;text-align:center;border:1px solid var(--border);color:var(--t2);font-weight:600}
-.tsigfi tr:nth-child(even) td{background:#f8fafc}
-.sigfi-hl{color:var(--verde-e);font-weight:700;font-family:var(--mono)}
-
-/* BLOCO FV — fundo âmbar para referência visual rápida */
-.bloco-fv-area{background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;padding:9px;display:flex;flex-direction:column;gap:7px;margin:2px 0}
-.bloco-fv-area .cl{color:#92400e!important}
-.bloco-fv{background:var(--fv-bg);border:1px solid var(--fv-borda);border-radius:6px;padding:7px 9px}
-.bloco-fv .cl{color:var(--fv-header)!important}
-
-/* SEPARADOR */
-.sep{border:none;border-top:1px solid var(--border);margin:3px 0}
-
-/* BARRA AÇÕES */
-.bar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;z-index:50;box-shadow:0 -4px 16px rgba(0,0,0,.06)}
-.bar-sp{flex:1}
-
-/* MODAL */
-.mov{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
-.mov.ativo{opacity:1;pointer-events:all}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:min(700px,95vw);max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-md)}
-.mh{background:var(--verde-bg);padding:11px 15px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--verde-borda);position:sticky;top:0}
-.mh h2{font-size:.9rem;color:var(--verde-e);font-weight:700}
-.mf{margin-left:auto;background:none;border:none;color:var(--t3);font-size:1.1rem;cursor:pointer}
-.mf:hover{color:var(--t1)}
-.mb{padding:12px 15px}
-.lista-item{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:7px;background:var(--bg);transition:.14s}
-.lista-item:hover{border-color:var(--verde-borda);background:var(--verde-bg)}
-.lista-info{flex:1;display:flex;flex-direction:column;gap:2px}
-.lista-cliente{font-weight:700;font-size:.86rem;color:var(--t1)}
-.lista-data,.lista-projetista{font-size:.7rem;color:var(--t3)}
-.lista-acoes{display:flex;gap:4px;flex-wrap:wrap}
-.sem-registros{color:var(--t4);font-style:italic;text-align:center;padding:20px}
-
-/* TOAST */
-#tc{position:fixed;bottom:75px;right:14px;display:flex;flex-direction:column;gap:7px;z-index:1000}
-.toast{padding:10px 15px;border-radius:var(--r);font-size:.8rem;font-weight:700;box-shadow:var(--shadow-md);opacity:0;transform:translateX(18px);transition:all .3s;max-width:290px}
-.toast.visivel{opacity:1;transform:translateX(0)}
-.toast-sucesso{background:var(--verde);color:#fff}
-.toast-aviso{background:var(--amarelo);color:#fff}
-.toast-erro{background:var(--verm);color:#fff}
-.toast-info{background:var(--t2);color:#fff}
-
-/* TOGGLE PERÍODO */
-.btn-toggle{padding:7px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--t3);cursor:pointer;font-weight:700;font-size:.75rem;transition:.14s;font-family:var(--font)}
-.btn-toggle.ativo{background:var(--verde);border-color:var(--verde);color:#fff}
-.btn-indiferente.ativo{background:var(--verde)!important;border-color:var(--verde)!important;color:#fff!important}
-
-/* TIME INPUT */
-input[type="time"]{width:95px;padding:6px 8px;font-size:.8rem;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--t1);font-family:var(--mono);font-weight:700}
-input[type="time"]:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-input[type="time"]::-webkit-calendar-picker-indicator{cursor:pointer;filter:opacity(.4)}
-
-/* AVISO SEM RESPOSTA */
-.sem-resposta-aviso{border:1.5px solid var(--amarelo)!important;background:var(--amarelo-bg)!important;border-radius:6px;padding:5px 6px}
-.sem-resposta-aviso .cl{color:var(--amarelo)!important}
-
-/* BADGE */
-.badge-rev{font-size:.62rem;background:#f1f5f9;color:var(--t3);padding:2px 8px;border-radius:20px;font-family:var(--mono);border:1px solid var(--border)}
+/* Calculadora — tema escuro */
+.stApp { background: #f8fafc; }
+.calc-section {
+    background: #161b22; border: 1px solid #21262d;
+    border-radius: 8px; padding: 16px 18px; margin-bottom: 12px;
+}
+.panel-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.7rem; font-weight: 700; color: #f6a800;
+    letter-spacing: 2px; text-transform: uppercase;
+    margin: 0 0 8px; padding-bottom: 6px;
+    border-bottom: 1px solid #21262d;
+}
+[data-testid="metric-container"] {
+    background: #161b22 !important;
+    border: 1px solid #21262d !important;
+    border-radius: 8px !important;
+}
 </style>
-</head>
-<body>
+""", unsafe_allow_html=True)
 
-<header>
+# ── CABEÇALHO ─────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="ekt-header">
   <div>
-    <div class="hlogo"><span class="hlogo-dot"></span>SISTEMA EKT</div>
-    <div class="hsub">Formulário de Viabilidade · Neoenergia / Elektro</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:800;color:#4ade80;letter-spacing:3px">
+      ⚡ SISTEMA EKT
+    </div>
+    <div style="font-size:0.7rem;color:#94a3b8;letter-spacing:1px;text-transform:uppercase">
+      Neoenergia / Elektro · Formulário de Viabilidade & Esforços Mecânicos
+    </div>
   </div>
   <span class="badge-rev">EKT-FRG-EXE-001 · Rev.06</span>
-  <div class="hacoes">
-    <span id="status-conexao" class="status-online">● Online</span>
-    <button class="btn btn-cz" onclick="abrirModal('modal-lista')">📋 Salvos</button>
-    <button class="btn btn-cz" onclick="novoFormulario()">🆕 Novo</button>
-  </div>
-</header>
-
-<div class="wrap">
-<form id="form-viabilidade" autocomplete="off" onsubmit="return false">
-<input type="hidden" id="form-id-atual" name="id">
-
-<!-- ══════════════════════════════════════════════════════════
-     DOIS BLOCOS — MAPA MENTAL
-     Esquerdo (verde): Identificação + Linha Viva + Ambiental
-     Direito (azul):   Executar Obra + Logística + Checklist + Projeto
-     ══════════════════════════════════════════════════════════ -->
-<div class="dois-blocos">
-
-  <!-- ╔══════════════════════════════════╗
-       ║  BLOCO ESQUERDO — VERDE         ║
-       ╚══════════════════════════════════╝ -->
-  <div class="bloco bloco-esq">
-    <div class="bloco-titulo">📍 Bloco 1 — Identificação · Linha Viva · Ambiental</div>
-
-    <div class="cards-grid cards-grid-1">
-
-      <!-- CARD: IDENTIFICAÇÃO -->
-      <div class="card">
-        <div class="ch">📍 Identificação</div>
-        <div class="cb">
-
-          <div class="cg">
-            <label class="cl">Nome do Cliente</label>
-            <input class="ci" type="text" name="nome_cliente" placeholder="Nome completo">
-          </div>
-          <div class="cg">
-            <label class="cl">Código do Projeto</label>
-            <input class="ci" type="text" name="codigo_projeto" placeholder="" style="background:#fff;color:#dc2626;font-weight:700;text-transform:uppercase;">
-          </div>
-          <div class="cg">
-            <label class="cl">Telefone do Cliente</label>
-            <div class="tel-row">
-              <input class="ci ci-ddd" type="text" name="ddd_cliente" maxlength="2" placeholder="DDD" inputmode="numeric">
-              <input class="ci ci-tel" type="text" name="telefone_cliente" maxlength="9" placeholder="000000000" inputmode="numeric">
-            </div>
-          </div>
-          <div class="cg">
-            <label class="cl">Data</label>
-            <input class="ci" type="date" name="data">
-          </div>
-          <div class="cg">
-            <label class="cl">Projetista 1</label>
-            <input class="ci" type="text" name="projetista1" placeholder="Nome do projetista 1" oninput="this.value=this.value.replace(/[0-9]/g,'')">
-          </div>
-          <div class="cg">
-            <label class="cl">Telefone Projetista 1</label>
-            <div class="tel-row">
-              <input class="ci ci-ddd" type="text" name="ddd_projetista" maxlength="2" placeholder="DDD" inputmode="numeric">
-              <input class="ci ci-tel" type="text" name="telefone_projetista" maxlength="9" placeholder="000000000" inputmode="numeric">
-            </div>
-          </div>
-          <div class="cg">
-            <label class="cl">Projetista 2</label>
-            <input class="ci" type="text" name="projetista2" placeholder="Nome do projetista 2" oninput="this.value=this.value.replace(/[0-9]/g,'')">
-          </div>
-          <div class="cg">
-            <label class="cl">Telefone Projetista 2</label>
-            <div class="tel-row">
-              <input class="ci ci-ddd" type="text" name="ddd_projetista2" maxlength="2" placeholder="DDD" inputmode="numeric">
-              <input class="ci ci-tel" type="text" name="telefone_projetista2" maxlength="9" placeholder="000000000" inputmode="numeric">
-            </div>
-          </div>
-
-          <hr class="sep">
-
-          <!-- TENSÃO — mutuamente exclusivos, antes do FV -->
-          <div class="cg">
-            <label class="cl">Tensão da Rede</label>
-            <div class="tensao-row">
-              <div class="tensao-item">
-                <input type="checkbox" id="tensao_345_chk" name="tensao_345_chk" value="sim">
-                <label class="tl" for="tensao_345_chk">Tensão 34,5kV</label>
-              </div>
-              <div class="tensao-item">
-                <input type="checkbox" id="tensao_138_chk" name="tensao_138_chk" value="sim">
-                <label class="tl" for="tensao_138_chk">Tensão 13,8kV</label>
-              </div>
-            </div>
-          </div>
-
-          <hr class="sep">
-
-          <!-- BLOCO FV — fundo âmbar: de Ligação Nova FV até a tabela SIGFI -->
-          <div class="bloco-fv-area">
-            <div class="cl" style="color:#92400e;font-size:.7rem;letter-spacing:.5px;margin-bottom:2px">⚡ FOTOVOLTAICO / SIGFI</div>
-
-            <div class="bloco-fv">
-              <div class="cl" style="color:var(--amarelo);margin-bottom:5px">Ligação Nova Fotovoltaica?</div>
-              <div class="snb">
-                <input type="radio" name="ligacao_nova_fv" id="lnfv_s" value="sim"><label for="lnfv_s" class="ls">SIM</label>
-                <input type="radio" name="ligacao_nova_fv" id="lnfv_n" value="nao"><label for="lnfv_n" class="ln">NÃO</label>
-                <input type="radio" name="ligacao_nova_fv" id="lnfv_na" value="na"><label for="lnfv_na" class="lna">N/A</label>
-              </div>
-            </div>
-
-            <div class="bloco-fv">
-              <div class="cl" style="color:var(--amarelo);margin-bottom:5px">Alteração de Carga Fotovoltaica?</div>
-              <div class="snb">
-                <input type="radio" name="alteracao_carga_fv" id="acfv_s" value="sim"><label for="acfv_s" class="ls">SIM</label>
-                <input type="radio" name="alteracao_carga_fv" id="acfv_n" value="nao"><label for="acfv_n" class="ln">NÃO</label>
-                <input type="radio" name="alteracao_carga_fv" id="acfv_na" value="na"><label for="acfv_na" class="lna">N/A</label>
-              </div>
-            </div>
-
-            <div class="cg">
-              <label class="cl">SIGFI Atual</label>
-              <select class="cs" name="sigfi_atual">
-                <option value="">Selecionar...</option>
-                <option>Ligação Nova</option><option>30</option><option>45</option><option>60</option><option>80</option><option>120</option><option>180</option>
-              </select>
-            </div>
-            <div class="cg">
-              <label class="cl">Novo SIGFI</label>
-              <select class="cs" name="sigfi_alteracao" id="sigfi_alteracao_sel">
-                <option value="">Selecionar...</option>
-                <option>30</option><option>45</option><option>60</option><option>80</option><option>120</option><option>180</option>
-              </select>
-            </div>
-
-            <!-- ═══ CALCULADORA DE ORÇAMENTO SIGFI ═══ -->
-            <div id="calc-sigfi-box" style="background:#fff;border:1.5px solid #fed7aa;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;">
-              <div style="font-family:var(--mono);font-size:.68rem;font-weight:700;color:#92400e;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #fde68a;padding-bottom:5px;margin-bottom:2px">
-                💰 Orçamento SIGFI
-              </div>
-
-              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                <button type="button" id="btn-calc-sigfi"
-                  style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-family:var(--font);font-size:.78rem;font-weight:700;cursor:pointer;transition:all .13s;white-space:nowrap"
-                  onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'"
-                  onclick="calcularOrcamentoSIGFI()">
-                  Calcular Orçamento
-                </button>
-                <span style="font-size:.68rem;color:#92400e;font-style:italic">
-                  Usa os campos Ligação Nova FV, SIGFI Atual e Novo SIGFI acima
-                </span>
-              </div>
-
-              <!-- Resultado -->
-              <div id="sigfi-resultado" style="display:none;flex-direction:column;gap:6px;">
-                <div id="sigfi-status-badge" style="text-align:center;padding:8px 12px;border-radius:6px;font-family:var(--mono);font-size:.82rem;font-weight:700;letter-spacing:.5px;"></div>
-                <div id="sigfi-detalhes" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;font-size:.8rem;">
-                  <table style="width:100%;border-collapse:collapse;">
-                    <tr style="border-bottom:1px solid #e2e8f0">
-                      <td style="padding:5px 4px;color:#64748b;font-weight:600">Mão de obra — Retirada</td>
-                      <td id="val-mo-ret" style="padding:5px 4px;text-align:right;font-family:var(--mono);font-weight:700;color:#0f172a"></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e2e8f0">
-                      <td style="padding:5px 4px;color:#64748b;font-weight:600">Mão de obra — Instalação</td>
-                      <td id="val-mo-inst" style="padding:5px 4px;text-align:right;font-family:var(--mono);font-weight:700;color:#0f172a"></td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e2e8f0">
-                      <td style="padding:5px 4px;color:#64748b;font-weight:600">Material</td>
-                      <td id="val-material" style="padding:5px 4px;text-align:right;font-family:var(--mono);font-weight:700;color:#0f172a"></td>
-                    </tr>
-                    <tr style="background:#f0fdf4;">
-                      <td style="padding:6px 4px;font-weight:800;color:#15803d;font-size:.85rem">TOTAL</td>
-                      <td id="val-total" style="padding:6px 4px;text-align:right;font-family:var(--mono);font-weight:800;color:#15803d;font-size:.9rem"></td>
-                    </tr>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <!-- ═══ FIM CALCULADORA ═══ -->
-
-            <table class="tsigfi">
-              <thead><tr><th>SIGFI</th><th>kVA</th><th>kW Máx</th></tr></thead>
-              <tbody>
-                <tr><td class="sigfi-hl">45</td><td>0,7</td><td>10</td></tr>
-                <tr><td class="sigfi-hl">60</td><td>1,0</td><td>14,28</td></tr>
-                <tr><td class="sigfi-hl">80</td><td>1,25</td><td>17,85</td></tr>
-                <tr><td class="sigfi-hl">120</td><td>1,5</td><td>21,42</td></tr>
-                <tr><td class="sigfi-hl">180</td><td>1,8</td><td>25,71</td></tr>
-              </tbody>
-            </table>
-          </div><!-- /bloco-fv-area -->
-
-          <div class="cg">
-            <label class="cl">Modelo Aterramento Primário Conforme OT-OPE-008</label>
-            <select class="cs" name="modelo_aterramento">
-              <option value="">Selecionar...</option>
-              <option value="A">A</option>
-              <option value="A_alternativo">A — Alternativo</option>
-              <option value="B_Linear">B — Linear</option>
-              <option value="B_cruz">B — Cruz</option>
-              <option value="C">C</option>
-              <option value="D">D</option>
-              <option value="Poco_profundo">Poço Profundo</option>
-            </select>
-          </div>
-          <div class="cg">
-            <label class="cl">Observações (Aterramento)</label>
-            <textarea class="cta" name="obs_aterramento" rows="2" placeholder="Obs sobre aterramento..."></textarea>
-          </div>
-
-        </div>
-      </div><!-- /IDENTIFICAÇÃO -->
-
-      <!-- CARD: LINHA VIVA – RISCOS – FOTOS -->
-      <div class="card">
-        <div class="ch">⚡ Linha Viva · Riscos · Fotos</div>
-        <div class="cb">
-
-          <div class="csn">
-            <span class="cl">Fotos (Obrigatório — salvas na pasta conforme ponto DXF)?</span>
-            <div class="snb">
-              <input type="radio" name="foto_obrigatoria" id="fo_s" value="sim"><label for="fo_s" class="ls">SIM</label>
-            </div>
-          </div>
-          <hr class="sep">
-          <div class="ch-sub">🔧 Campo</div>
-          <div class="csn">
-            <span class="cl">Manobra?</span>
-            <div class="snb">
-              <input type="radio" name="manobra" id="man_s" value="sim"><label for="man_s" class="ls">SIM</label>
-              <input type="radio" name="manobra" id="man_n" value="nao"><label for="man_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Big Jumper?</span>
-            <div class="snb">
-              <input type="radio" name="big_jumper" id="bj_s" value="sim"><label for="bj_s" class="ls">SIM</label>
-              <input type="radio" name="big_jumper" id="bj_n" value="nao"><label for="bj_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">BT Energizado?</span>
-            <div class="snb">
-              <input type="radio" name="bt_energizado" id="bte_s" value="sim"><label for="bte_s" class="ls">SIM</label>
-              <input type="radio" name="bt_energizado" id="bte_n" value="nao"><label for="bte_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn lv-destaque">
-            <span class="cl lv-label">⚡ Linha Viva? <span class="lv-badge">ATENÇÃO</span></span>
-            <div class="snb">
-              <input type="radio" name="linha_viva" id="lv_s" value="sim"><label for="lv_s" class="ls-lv">SIM</label>
-              <input type="radio" name="linha_viva" id="lv_n" value="nao"><label for="lv_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Projeto possui estrutura onde a Linha-Viva Não Consiga Trabalhar?</span>
-            <div class="snb">
-              <input type="radio" name="proj_estrutura_trabalhar" id="pet_s" value="sim"><label for="pet_s" class="ls">SIM</label>
-              <input type="radio" name="proj_estrutura_trabalhar" id="pet_n" value="nao"><label for="pet_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Estrutura Canadense?</span>
-            <div class="snb">
-              <input type="radio" name="estrutura_canadense" id="ec_s" value="sim"><label for="ec_s" class="ls">SIM</label>
-              <input type="radio" name="estrutura_canadense" id="ec_n" value="nao"><label for="ec_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Projeto envolve Fio 06 de cobre/alumínio ou cabo CAZ?</span>
-            <div class="snb">
-              <input type="radio" name="fio_caz" id="fcaz_s" value="sim"><label for="fcaz_s" class="ls">SIM</label>
-              <input type="radio" name="fio_caz" id="fcaz_n" value="nao"><label for="fcaz_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Poste Podre?</span>
-            <div class="snb">
-              <input type="radio" name="poste_podre" id="pp_s" value="sim"><label for="pp_s" class="ls">SIM</label>
-              <input type="radio" name="poste_podre" id="pp_n" value="nao"><label for="pp_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">CHAVE FACA Provisória?</span>
-            <div class="snb">
-              <input type="radio" name="cf_provisoria" id="cfp_s" value="sim"><label for="cfp_s" class="ls">SIM</label>
-              <input type="radio" name="cf_provisoria" id="cfp_n" value="nao"><label for="cfp_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <hr class="sep">
-          <div class="ch-sub">⚠️ Risco Eminente</div>
-          <div class="csn">
-            <span class="cl">Existe Risco Eminente no Local?</span>
-            <div class="snb">
-              <input type="radio" name="risco_eminente" id="re_s" value="sim"><label for="re_s" class="ls">SIM</label>
-              <input type="radio" name="risco_eminente" id="re_n" value="nao"><label for="re_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="cg">
-            <label class="cl">Qual o Melhor Prazo para Execução da obra caso haja risco?</label>
-            <div class="rg">
-              <input type="radio" name="prazo_risco" id="pr30" value="30 dias"><label for="pr30">30 dias</label>
-              <input type="radio" name="prazo_risco" id="pr45" value="45 dias"><label for="pr45">45 dias</label>
-              <input type="radio" name="prazo_risco" id="pr60" value="60 dias"><label for="pr60">60 dias</label>
-              <input type="radio" name="prazo_risco" id="prurg" value="Urgente"><label for="prurg">🚨 Urgente</label>
-            </div>
-          </div>
-
-        </div>
-      </div><!-- /LINHA VIVA -->
-
-      <!-- CARD: AMBIENTAL (unificado — APP + intervenções + poda/corte) -->
-      <div class="card">
-        <div class="ch">🌿 Ambiental</div>
-        <div class="cb">
-
-          <!-- Poda e Corte: só número, sem botão SIM/NÃO -->
-          <div class="cg">
-            <label class="cl">Poda de Árvore — Quantidade</label>
-            <input class="ci-qtd-only" type="number" name="amb_poda_qtd" min="0" placeholder="0" inputmode="numeric">
-          </div>
-          <div class="cg">
-            <label class="cl">Corte de Árvore — Quantidade</label>
-            <input class="ci-qtd-only" type="number" name="amb_corte_qtd" min="0" placeholder="0" inputmode="numeric">
-          </div>
-
-          <div class="csn">
-            <span class="cl">Aut. Proprietário — Poda?</span>
-            <div class="snb">
-              <input type="radio" name="aut_prop_poda" id="app2_s" value="sim"><label for="app2_s" class="ls">SIM</label>
-              <input type="radio" name="aut_prop_poda" id="app2_n" value="nao"><label for="app2_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Aut. Proprietário — Corte?</span>
-            <div class="snb">
-              <input type="radio" name="aut_prop_corte" id="apc_s" value="sim"><label for="apc_s" class="ls">SIM</label>
-              <input type="radio" name="aut_prop_corte" id="apc_n" value="nao"><label for="apc_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Autorização de Passagem?</span>
-            <div class="snb">
-              <input type="radio" name="autorizacao_passagem" id="apass_s" value="sim"><label for="apass_s" class="ls">SIM</label>
-              <input type="radio" name="autorizacao_passagem" id="apass_n" value="nao"><label for="apass_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Loteamento?</span>
-            <div class="snb">
-              <input type="radio" name="loteamento" id="lot_s" value="sim"><label for="lot_s" class="ls">SIM</label>
-              <input type="radio" name="loteamento" id="lot_n" value="nao"><label for="lot_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Travessia / Ocupação?</span>
-            <div class="snb">
-              <input type="radio" name="travessia_ocup" id="to_s" value="sim"><label for="to_s" class="ls">SIM</label>
-              <input type="radio" name="travessia_ocup" id="to_n" value="nao"><label for="to_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Formulário de Ocupação?</span>
-            <div class="snb">
-              <input type="radio" name="formular_ocupar" id="fo2_s" value="sim"><label for="fo2_s" class="ls">SIM</label>
-              <input type="radio" name="formular_ocupar" id="fo2_n" value="nao"><label for="fo2_n" class="ln">NÃO</label>
-            </div>
-          </div>
-
-          <hr class="sep">
-          <div class="ch-sub">🌿 Intervenção em Local</div>
-          <div style="font-size:.68rem;color:var(--t3);font-weight:600;margin-bottom:2px">Marque todos que se aplicam:</div>
-
-          <div class="csn">
-            <span class="cl">APP — Área Preservação Permanente?</span>
-            <div class="snb">
-              <input type="radio" name="amb_app" id="app_s" value="sim"><label for="app_s" class="ls">SIM</label>
-              <input type="radio" name="amb_app" id="app_n" value="nao"><label for="app_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Unidade de Conservação?</span>
-            <div class="snb">
-              <input type="radio" name="amb_unidade_conservacao" id="uc_s" value="sim"><label for="uc_s" class="ls">SIM</label>
-              <input type="radio" name="amb_unidade_conservacao" id="uc_n" value="nao"><label for="uc_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Licença Ambiental?</span>
-            <div class="snb">
-              <input type="radio" name="licenca_ambiental" id="la_s" value="sim"><label for="la_s" class="ls">SIM</label>
-              <input type="radio" name="licenca_ambiental" id="la_n" value="nao"><label for="la_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Abertura de Faixa?</span>
-            <div class="snb">
-              <input type="radio" name="amb_abertura_faixa" id="af2_s" value="sim"><label for="af2_s" class="ls">SIM</label>
-              <input type="radio" name="amb_abertura_faixa" id="af2_n" value="nao"><label for="af2_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="cg">
-            <label class="cl">Local da Intervenção (descrição)</label>
-            <input class="ci" type="text" name="intervencao_em" placeholder="Descreva o local...">
-          </div>
-          <div class="csn">
-            <span class="cl">Padrão em Terreno de 3º?</span>
-            <div class="snb">
-              <input type="radio" name="padrao_terreno_3" id="pt3_s" value="sim"><label for="pt3_s" class="ls">SIM</label>
-              <input type="radio" name="padrao_terreno_3" id="pt3_n" value="nao"><label for="pt3_n" class="ln">NÃO</label>
-            </div>
-          </div>
-
-        </div>
-      </div><!-- /AMBIENTAL -->
-
-    </div><!-- /cards-grid esq -->
-  </div><!-- /bloco-esq -->
-
-  <!-- ╔══════════════════════════════════╗
-       ║  BLOCO DIREITO — AZUL           ║
-       ╚══════════════════════════════════╝ -->
-  <div class="bloco bloco-dir">
-    <div class="bloco-titulo">🔨 Bloco 2 — Executar Obra · Logística · Checklist · Projeto</div>
-
-    <div class="cards-grid cards-grid-1">
-
-      <!-- CARD: EXECUTAR OBRA -->
-      <div class="card">
-        <div class="ch">🔨 Executar Obra</div>
-        <div class="cb">
-
-          <div class="csn">
-            <span class="cl">Período de Execução</span>
-            <div class="snb periodo-toggle" style="flex-wrap:wrap;gap:6px;">
-              <button type="button" class="btn-toggle" data-value="semana" style="flex:1;min-width:100px;">✔ Segunda a Sexta</button>
-              <button type="button" class="btn-toggle" data-value="fimsemana" style="flex:1;min-width:100px;">✔ Sábado / Domingo</button>
-              <button type="button" class="btn-toggle btn-indiferente" data-value="indiferente" style="width:100%;margin-top:2px;">✔ Indiferente</button>
-            </div>
-            <input type="hidden" name="periodo_execucao" id="periodo_execucao">
-          </div>
-
-          <div class="csn">
-            <span class="cl">Trocar Medidores 240V?</span>
-            <div class="snb">
-              <input type="radio" name="trocar_medidores" id="tm_s" value="sim"><label for="tm_s" class="ls">SIM</label>
-              <input type="radio" name="trocar_medidores" id="tm_n" value="nao"><label for="tm_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Medidor já Ligado?</span>
-            <div class="snb">
-              <input type="radio" name="medidor_ligado" id="ml_s" value="sim"><label for="ml_s" class="ls">SIM</label>
-              <input type="radio" name="medidor_ligado" id="ml_n" value="nao"><label for="ml_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="cg">
-            <label class="cl">Nº Medidor já Ligado</label>
-            <input class="ci" type="text" name="num_medidor" placeholder="Número do medidor">
-          </div>
-          <div class="cg">
-            <label class="cl">Confiabilidade da RetaGuarda</label>
-            <input class="ci" type="text" name="cc_reta_guarda" placeholder="—">
-          </div>
-          <div class="cg">
-            <label class="cl">Número de Clientes</label>
-            <input class="ci" type="number" name="num_clientes" placeholder="0" min="0" inputmode="numeric" style="text-transform:none">
-          </div>
-          <div class="csn">
-            <span class="cl">Sinalizou Dist. Circuitos?</span>
-            <div class="snb">
-              <input type="radio" name="sinalizou_dist_circuitos" id="sd_s" value="sim"><label for="sd_s" class="ls">SIM</label>
-              <input type="radio" name="sinalizou_dist_circuitos" id="sd_n" value="nao"><label for="sd_n" class="ln">NÃO</label>
-            </div>
-          </div>
-
-        </div>
-      </div><!-- /EXECUTAR OBRA -->
-
-      <!-- CARD: LOGÍSTICA -->
-      <div class="card">
-        <div class="ch">🚚 Logística</div>
-        <div class="cb">
-
-          <div class="csn">
-            <span class="cl">Distribuir Postes no Dia?</span>
-            <div class="snb">
-              <input type="radio" name="distribuir_postes" id="dp_s" value="sim"><label for="dp_s" class="ls">SIM</label>
-              <input type="radio" name="distribuir_postes" id="dp_n" value="nao"><label for="dp_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Apoio na distribuição dos postes?</span>
-            <div class="snb">
-              <input type="radio" name="apoio_distribuicao" id="ad_s" value="sim"><label for="ad_s" class="ls">SIM</label>
-              <input type="radio" name="apoio_distribuicao" id="ad_n" value="nao"><label for="ad_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Sinaliza Trânsito?</span>
-            <div class="snb">
-              <input type="radio" name="sinaliza_transito" id="st_s" value="sim"><label for="st_s" class="ls">SIM</label>
-              <input type="radio" name="sinaliza_transito" id="st_n" value="nao"><label for="st_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Sinal Celular?</span>
-            <div class="snb">
-              <input type="radio" name="sinal_celular" id="sc_s" value="sim"><label for="sc_s" class="ls">SIM</label>
-              <input type="radio" name="sinal_celular" id="sc_n" value="nao"><label for="sc_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Acesso com Chuva?</span>
-            <div class="snb">
-              <input type="radio" name="acesso_chuva" id="acch_s" value="sim"><label for="acch_s" class="ls">SIM</label>
-              <input type="radio" name="acesso_chuva" id="acch_n" value="nao"><label for="acch_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Acesso Caminhão?</span>
-            <div class="snb">
-              <input type="radio" name="acesso_caminhao" id="acam_s" value="sim"><label for="acam_s" class="ls">SIM</label>
-              <input type="radio" name="acesso_caminhao" id="acam_n" value="nao"><label for="acam_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Porteira Cadeada?</span>
-            <div class="snb">
-              <input type="radio" name="porteira_cadeada" id="pc_s" value="sim"><label for="pc_s" class="ls">SIM</label>
-              <input type="radio" name="porteira_cadeada" id="pc_n" value="nao"><label for="pc_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Possui Nome de Rua?</span>
-            <div class="snb">
-              <input type="radio" name="possui_nome_rua" id="pnr_s" value="sim"><label for="pnr_s" class="ls">SIM</label>
-              <input type="radio" name="possui_nome_rua" id="pnr_n" value="nao"><label for="pnr_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <hr class="sep">
-          <div class="ch-sub">Atenção</div>
-          <div class="csn">
-            <span class="cl">Caixa de Derivação?</span>
-            <div class="snb">
-              <input type="radio" name="apoio_caixa" id="ac_s" value="sim"><label for="ac_s" class="ls">SIM</label>
-              <input type="radio" name="apoio_caixa" id="ac_n" value="nao"><label for="ac_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Tubulação Subterrânea?</span>
-            <div class="snb">
-              <input type="radio" name="apoio_tubulacao" id="at_s" value="sim"><label for="at_s" class="ls">SIM</label>
-              <input type="radio" name="apoio_tubulacao" id="at_n" value="nao"><label for="at_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Verificou Rede IP?</span>
-            <div class="snb">
-              <input type="radio" name="verificou_rede_ip" id="vrip_s" value="sim"><label for="vrip_s" class="ls">SIM</label>
-              <input type="radio" name="verificou_rede_ip" id="vrip_n" value="nao"><label for="vrip_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Telefônica?</span>
-            <div class="snb">
-              <input type="radio" name="telefonica" id="tel_s" value="sim"><label for="tel_s" class="ls">SIM</label>
-              <input type="radio" name="telefonica" id="tel_n" value="nao"><label for="tel_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Fio Drops?</span>
-            <div class="snb">
-              <input type="radio" name="apoio_drops" id="adr_s" value="sim"><label for="adr_s" class="ls">SIM</label>
-              <input type="radio" name="apoio_drops" id="adr_n" value="nao"><label for="adr_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Fibra Óptica?</span>
-            <div class="snb">
-              <input type="radio" name="apoio_fibra" id="af_s" value="sim"><label for="af_s" class="ls">SIM</label>
-              <input type="radio" name="apoio_fibra" id="af_n" value="nao"><label for="af_n" class="ln">NÃO</label>
-            </div>
-          </div>
-
-        </div>
-      </div><!-- /LOGÍSTICA -->
-
-      <!-- CARD: CHECKLIST -->
-      <div class="card">
-        <div class="ch">✅ Checklist</div>
-        <div class="cb">
-
-          <div class="csn">
-            <span class="cl">Abelha no Poste?</span>
-            <div class="snb">
-              <input type="radio" name="abelha_poste" id="ab_s" value="sim"><label for="ab_s" class="ls">SIM</label>
-              <input type="radio" name="abelha_poste" id="ab_n" value="nao"><label for="ab_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Cava em Rocha?</span>
-            <div class="snb">
-              <input type="radio" name="cava_rocha" id="cr_s" value="sim"><label for="cr_s" class="ls">SIM</label>
-              <input type="radio" name="cava_rocha" id="cr_n" value="nao"><label for="cr_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Cava Profunda?</span>
-            <div class="snb">
-              <input type="radio" name="cava_profunda" id="cpf_s" value="sim"><label for="cpf_s" class="ls">SIM</label>
-              <input type="radio" name="cava_profunda" id="cpf_n" value="nao"><label for="cpf_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Tubulação de Gás?</span>
-            <div class="snb">
-              <input type="radio" name="tubulacao_gas" id="tg_s" value="sim"><label for="tg_s" class="ls">SIM</label>
-              <input type="radio" name="tubulacao_gas" id="tg_n" value="nao"><label for="tg_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Piquete/spray?</span>
-            <div class="snb">
-              <input type="radio" name="piquetespray" id="pqs_s" value="sim"><label for="pqs_s" class="ls">SIM</label>
-              <input type="radio" name="piquetespray" id="pqs_n" value="nao"><label for="pqs_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Reparo de Calçada?</span>
-            <div class="snb">
-              <input type="radio" name="reparo_calcada" id="rc_s" value="sim"><label for="rc_s" class="ls">SIM</label>
-              <input type="radio" name="reparo_calcada" id="rc_n" value="nao"><label for="rc_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Reparo Calçada Especial?</span>
-            <div class="snb">
-              <input type="radio" name="reparo_calcada_especial" id="rce_s" value="sim"><label for="rce_s" class="ls">SIM</label>
-              <input type="radio" name="reparo_calcada_especial" id="rce_n" value="nao"><label for="rce_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Indicado cercas e quantidade no DXF?</span>
-            <div class="snb">
-              <input type="radio" name="indicado_dxf" id="idxf_s" value="sim"><label for="idxf_s" class="ls">SIM</label>
-              <input type="radio" name="indicado_dxf" id="idxf_n" value="nao"><label for="idxf_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Verificado e Realizado Adequação de Elos a Montante e a Jusante?</span>
-            <div class="snb">
-              <input type="radio" name="efeito_montante_jusante" id="emj_s" value="sim"><label for="emj_s" class="ls">SIM</label>
-              <input type="radio" name="efeito_montante_jusante" id="emj_n" value="nao"><label for="emj_n" class="ln">NÃO</label>
-              <input type="radio" name="efeito_montante_jusante" id="emj_na" value="na"><label for="emj_na" class="lna">N/A</label>
-            </div>
-          </div>
-          <div class="cg">
-            <label class="cl">Indicação Cercas e Qtd. no DXF</label>
-            <input class="ci" type="text" name="indicacao_cercas_dxf" placeholder="Descrever...">
-          </div>
-
-        </div>
-      </div><!-- /CHECKLIST -->
-
-      <!-- CARD: PROJETO & DIVERSOS -->
-      <div class="card">
-        <div class="ch">📐 Projeto & Diversos</div>
-        <div class="cb">
-
-          <div class="ch-sub">🔧 Transformador / Equipamentos</div>
-          <div class="csn">
-            <span class="cl">Substituir Transformador?</span>
-            <div class="snb">
-              <input type="radio" name="substituir_trafo" id="str_s" value="sim"><label for="str_s" class="ls">SIM</label>
-              <input type="radio" name="substituir_trafo" id="str_n" value="nao"><label for="str_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Substituir Barramento?</span>
-            <div class="snb">
-              <input type="radio" name="barramento" id="bar_s" value="sim"><label for="bar_s" class="ls">SIM</label>
-              <input type="radio" name="barramento" id="bar_n" value="nao"><label for="bar_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Substituir Ligação Chave e Para-raio?</span>
-            <div class="snb">
-              <input type="radio" name="ligacao_cc_pr" id="lcc_s" value="sim"><label for="lcc_s" class="ls">SIM</label>
-              <input type="radio" name="ligacao_cc_pr" id="lcc_n" value="nao"><label for="lcc_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Pintar Conf/Tomb?</span>
-            <div class="snb">
-              <input type="radio" name="pintar_conf_tomb" id="pct_s" value="sim"><label for="pct_s" class="ls">SIM</label>
-              <input type="radio" name="pintar_conf_tomb" id="pct_n" value="nao"><label for="pct_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Possui GLV?</span>
-            <div class="snb">
-              <input type="radio" name="possui_glv" id="pglv_s" value="sim"><label for="pglv_s" class="ls">SIM</label>
-              <input type="radio" name="possui_glv" id="pglv_n" value="nao"><label for="pglv_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Instalar Protetor de Bucha?</span>
-            <div class="snb">
-              <input type="radio" name="instalar_protetor" id="iprot_s" value="sim"><label for="iprot_s" class="ls">SIM</label>
-              <input type="radio" name="instalar_protetor" id="iprot_n" value="nao"><label for="iprot_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Verificado Adequação?</span>
-            <div class="snb">
-              <input type="radio" name="verificado_adequacao" id="va_s" value="sim"><label for="va_s" class="ls">SIM</label>
-              <input type="radio" name="verificado_adequacao" id="va_n" value="nao"><label for="va_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <div class="csn">
-            <span class="cl">Doar Padrão?</span>
-            <div class="snb">
-              <input type="radio" name="doar_padrao" id="dp2_s" value="sim"><label for="dp2_s" class="ls">SIM</label>
-              <input type="radio" name="doar_padrao" id="dp2_n" value="nao"><label for="dp2_n" class="ln">NÃO</label>
-            </div>
-          </div>
-          <hr class="sep">
-          <div class="cg">
-            <label class="cl">📝 Anotações Gerais</label>
-            <textarea class="cta" name="anotacoes" rows="4" placeholder="Observações, pendências, detalhes importantes..."></textarea>
-          </div>
-
-        </div>
-      </div><!-- /PROJETO -->
-
-    </div><!-- /cards-grid dir -->
-  </div><!-- /bloco-dir -->
-
-</div><!-- /dois-blocos -->
-</form>
-</div><!-- /wrap -->
-
-<!-- BARRA DE AÇÕES -->
-<div class="bar">
-  <span style="font-size:.7rem;color:var(--t4);font-family:var(--mono)">EKT-FRG-EXE-001</span>
-  <div class="bar-sp"></div>
-  <button class="btn btn-cz" onclick="novoFormulario()">🆕 Novo</button>
-  <button class="btn btn-verde" onclick="salvarFormulario()">💾 Salvar</button>
-  <button class="btn btn-am" onclick="gerarPDF()">📄 Gerar PDF</button>
-  <button class="btn" style="background:#7c3aed;color:#fff;" onclick="salvarJPG()">📸 Salvar JPG</button>
-  <button class="btn btn-az" onclick="abrirModal('modal-lista')">📋 Ver Salvos</button>
 </div>
+<br>
+""", unsafe_allow_html=True)
 
-<!-- MODAL LISTA -->
-<div class="mov" id="modal-lista" onclick="if(event.target===this)fecharModal('modal-lista')">
-  <div class="modal">
-    <div class="mh">
-      <h2>📋 Formulários Salvos</h2>
-      <button class="mf" onclick="fecharModal('modal-lista')">✕</button>
+# ── ABAS ──────────────────────────────────────────────────────────────────────
+aba1, aba2 = st.tabs([
+    "📋  Formulário de Viabilidade",
+    "🏗️  Calculadora de Esforços Mecânicos",
+])
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 1 — FORMULÁRIO HTML
+# ══════════════════════════════════════════════════════════════════════════════
+with aba1:
+    html_path = Path(__file__).parent / "index.html"
+    if not html_path.exists():
+        st.error("❌ Arquivo index.html não encontrado.")
+    else:
+        html_content = html_path.read_text(encoding="utf-8")
+        components.html(html_content, height=1150, scrolling=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 2 — CALCULADORA DE ESFORÇOS (calculo_esforco.py integrado)
+# ══════════════════════════════════════════════════════════════════════════════
+with aba2:
+
+    # ── DADOS ─────────────────────────────────────────────────────────────────
+    ALTURA_FINAL = {9:7.4, 10:8.3, 11:9.2, 12:10.1, 14:11.9, 16:13.7}
+
+    TRACAO_CONV = {
+        "A04":60,"A02":86,"A20":173,"A40":274,"A336":436,"A477":619,
+        "C02":171,"C04":107,"C06":60,"C120":568,"C20":342,"C25":106,
+        "C35":155,"C40":544,"C70":296,
+        "S04":219,"S02":347,"S20":696,"S40":1108,"S336":1388,"S477":2497,
+    }
+    FAMILIAS_CONV = {
+        "CA — Alum. s/ alma de aço": ["A04","A02","A20","A40","A336","A477"],
+        "CAA — Alum. c/ alma de aço":["C02","C04","C06","C120","C20","C25","C35","C40","C70"],
+        "Cu — Cobre nu":             ["S04","S02","S20","S40","S336","S477"],
+    }
+    CABOS_BT = {
+        "CA — Alumínio": ["A04","A02","A20","A40","A336","A477"],
+        "Cu — Cobre":    ["S04","S02","S20","S40","S336","S477"],
+    }
+    TRACAO_PA  = {"PA50":311,"PA70":375,"PA95":469,"PA120":527,"PA185":683,"PA240":796}
+    TRACAO_PB  = {
+        "PB35":{5:4,10:14,15:32,20:56,25:88,30:127,35:172,40:225},
+        "PB50":{5:6,10:24,15:51,20:91,25:142,30:204,35:278,40:363},
+        "PB70":{5:7,10:30,15:67,20:119,25:186,30:267,35:364,40:475},
+        "PB120":{5:8,10:33,15:74,20:132,25:206,30:296,35:403,40:527},
+    }
+    VOS_PB = [5,10,15,20,25,30,35,40]
+    TRACAO_CAZ = {
+        "CAZ 3,09":  {50:229,100:256,150:263,200:282,300:318,400:349,500:376,600:400},
+        "CAZ 3x2,25":{50:357,100:395,150:406,200:436,300:491,400:540,500:580,600:615},
+        "CAW 3,26":  {50:244,100:273,150:276,200:296,300:334,400:368,500:398,600:426},
+        "CAW 3x2,59":{50:438,100:492,150:495,200:524,300:588,400:645,500:696,600:741},
+        "CAA 04":    {50:217,100:269,150:313,200:324,300:324,400:324,500:324,600:324},
+        "A50P":{10:461,15:469,20:477,25:486,30:495,35:503,40:516,45:537,50:555,55:571,60:586,65:600,70:612,75:623,80:632},
+        "A70P":{10:468,15:483,20:498,25:514,30:530,35:544,40:558,45:582,50:604,55:624,60:641,65:657,70:672,75:685,80:697},
+        "A120P":{10:489,15:521,20:553,25:584,30:614,35:641,40:665,45:692,50:722,55:749,60:774,65:797,70:818,75:837,80:854},
+        "A180P":{10:514,15:562,20:610,25:655,30:697,35:735,40:770,45:802,50:837,55:872,60:903,65:933,70:960,75:985,80:1008},
+    }
+    VOS_CAZ = [50,100,150,200,300,400,500,600]
+    TRACAO_PROT = {
+        "URBANO15KVA50P":240,"URBANO15KVA70P":321,"URBANO15KVA120P":510,
+        "URBANO15KVA185P":400,"URBANO15KVA240P":720,
+        "RURAL15KVA50P":334,"RURAL15KVA70P":407,"RURAL15KVA120P":584,
+        "RURAL15KVA185P":400,"RURAL15KVA240P":1366,
+        "URBANO36,2KVA70P":426,"URBANO36,2KVA120P":581,"URBANO36,2KVA185P":822,
+        "RURAL36,2KVA70P":524,"RURAL36,2KVA120P":779,"RURAL36,2KVA185P":1584,
+    }
+    COMPACTA_VAO = {
+        "URBANO15KVA35P":{15:342,20:349,25:355,30:365,35:386,40:405,45:422,50:438,55:451,60:464},
+        "URBANO15KVA70P":{15:366,20:383,25:400,30:417,35:444,40:468,45:490,50:511,55:529,60:546},
+        "URBANO15KVA185P":{15:442,20:487,25:528,30:567,35:603,40:643,45:680,50:714,55:746,60:775},
+        "URBANO15KVA240P":{15:478,20:533,25:584,30:631,35:674,40:720,45:763,50:803,55:840,60:875},
+        "RURAL15KVA35P":{15:401,20:459,25:512,30:560,35:603,40:643,45:680,50:714,55:745,60:774,65:801,70:827,75:850,80:872,85:892,90:911,95:929,100:945},
+        "RURAL15KVA70P":{15:435,20:501,25:561,30:616,35:665,40:711,45:754,50:793,55:830,60:864,65:895,70:925,75:953,80:978,85:1003,90:1025,95:1047,100:1067},
+        "RURAL15KVA185P":{15:521,20:608,25:685,30:756,35:822,40:883,45:939,50:992,55:1041,60:1088,65:1131,70:1172,75:1211,80:1248,85:1282,90:1315,95:1345,100:1375},
+        "RURAL15KVA240P":{15:559,20:654,25:740,30:818,35:890,40:958,45:1020,50:1079,55:1134,60:1186,65:1235,70:1281,75:1324,80:1366,85:1405,90:1442,95:1477,100:1510},
+        "URBANO36,2KVA70P":{15:433,20:475,25:514,30:557,35:600,40:640,45:676,50:710,55:741,60:770},
+        "URBANO36,2KVA185P":{15:521,20:588,25:650,30:707,35:767,40:822,45:874,50:922,55:966,60:1008},
+        "RURAL36,2KVA70P":{15:542,20:633,25:715,30:790,35:859,40:923,45:983,50:1039,55:1092,60:1141,65:1187,70:1231,75:1273,80:1312,85:1349,90:1384,95:1417,100:1448},
+        "RURAL36,2KVA185P":{15:630,20:741,25:840,30:932,35:1017,40:1096,45:1170,50:1239,55:1305,60:1367,65:1425,70:1481,75:1534,80:1584,85:1631,90:1677,95:1720,100:1761},
+    }
+    COMPACTA_FIXO = {
+        "URBANO15KVA50P":516,"URBANO15KVA70P":468,"URBANO15KVA120P":665,
+        "URBANO15KVA185P":643,"URBANO15KVA240P":720,"URBANO15KVA35P":405,
+        "RURAL15KVA35P":872,"RURAL15KVA50P":1035,"RURAL15KVA70P":978,
+        "RURAL15KVA120P":1257,"RURAL15KVA185P":1248,"RURAL15KVA240P":1366,
+        "URBANO36,2KVA70P":640,"URBANO36,2KVA120P":805,"URBANO36,2KVA185P":822,
+        "RURAL36,2KVA70P":1312,"RURAL36,2KVA120P":1577,"RURAL36,2KVA185P":1584,
+        "RURAL > 80m15KVA35P":945,"RURAL > 80m15KVA50P":1795,
+        "RURAL > 80m15KVA70P":1067,"RURAL > 80m15KVA120P":1797,
+        "RURAL > 80m15KVA185P":1375,"RURAL > 80m15KVA240P":1510,
+    }
+
+    def interp(tab, v):
+        k = sorted(tab.keys())
+        if v <= k[0]:  return float(tab[k[0]])
+        if v >= k[-1]: return float(tab[k[-1]])
+        for i in range(len(k)-1):
+            if k[i] <= v <= k[i+1]:
+                return float(tab[k[i]] + (tab[k[i+1]]-tab[k[i]])*(v-k[i])/(k[i+1]-k[i]))
+        return 0.0
+
+    def get_compacta(local, tens, cabo, vao):
+        key = f"{local}{tens}{cabo}"
+        return interp(COMPACTA_VAO[key], vao) if key in COMPACTA_VAO else float(COMPACTA_FIXO.get(key, 0))
+
+    ANGULOS = list(range(0, 365, 5))
+
+    def w_cabo_at(pfx):
+        tipo = st.selectbox("Tipo de rede", [
+            "Convencional (S / A / C)",
+            "Pré-Reunido Primária (PA)",
+            "CAZ / CAW", "Protegida", "Compacta",
+        ], key=f"{pfx}_tipo")
+        t = 0.0
+        nome_tipo = tipo.split("(")[0].strip()
+        if tipo == "Convencional (S / A / C)":
+            c1,c2,c3 = st.columns([1,2,2])
+            qtd  = c1.number_input("Qtd/fase", 1, 10, 3, key=f"{pfx}_qtd")
+            fam  = c2.selectbox("Família", list(FAMILIAS_CONV.keys()), key=f"{pfx}_fam")
+            cabo = c3.selectbox("Cabo", FAMILIAS_CONV[fam], key=f"{pfx}_cabo")
+            t    = float(TRACAO_CONV.get(cabo, 0)) * qtd
+        elif tipo == "Pré-Reunido Primária (PA)":
+            c1,c2 = st.columns(2)
+            cabo = c1.selectbox("Cabo", list(TRACAO_PA.keys()), key=f"{pfx}_cabo")
+            qtd  = c2.number_input("Qtd.", 1, 6, 1, key=f"{pfx}_qtd")
+            t    = float(TRACAO_PA.get(cabo, 0)) * qtd; nome_tipo = "PA"
+        elif tipo == "CAZ / CAW":
+            c1,c2 = st.columns(2)
+            cabo = c1.selectbox("Cabo", list(TRACAO_CAZ.keys()), key=f"{pfx}_cabo")
+            vao  = c2.select_slider("Vão (m)", VOS_CAZ, value=100, key=f"{pfx}_vao")
+            t    = interp(TRACAO_CAZ[cabo], vao); nome_tipo = "CAZ"
+        elif tipo == "Protegida":
+            c1,c2,c3 = st.columns(3)
+            loc  = c1.selectbox("Local", ["URBANO","RURAL"], key=f"{pfx}_loc")
+            tens = c2.selectbox("Tensão", ["15KV","36,2KV"], key=f"{pfx}_tens")
+            cabo = c3.selectbox("Cabo", ["A50P","A70P","A120P","A185P","A240P"], key=f"{pfx}_cabo")
+            t    = float(TRACAO_PROT.get(f"{loc}{tens}{cabo}", 0))
+        elif tipo == "Compacta":
+            c1,c2,c3,c4 = st.columns(4)
+            loc  = c1.selectbox("Local", ["URBANO","RURAL","RURAL > 80m"], key=f"{pfx}_loc")
+            tens = c2.selectbox("Tensão", ["15KV","36,2KV"], key=f"{pfx}_tens")
+            cabo = c3.selectbox("Cabo", ["A35P","A50P","A70P","A120P","A185P","A240P"], key=f"{pfx}_cabo")
+            vao  = c4.number_input("Vão (m)", 10, 100, 40, step=5, key=f"{pfx}_vao")
+            t    = get_compacta(loc, tens, cabo, vao)
+        st.caption(f"⚡ Tração: **{t:.0f} daN**")
+        return float(t), nome_tipo
+
+    def w_cabo_bt(pfx):
+        tipo = st.selectbox("Tipo de cabo BT", ["Convencional (A / C)","Pré-Reunido BT (PB)","CAZ / CAW"], key=f"{pfx}_tipo")
+        t = 0.0; nome = tipo.split("(")[0].strip()
+        if tipo == "Convencional (A / C)":
+            st.markdown("**Fases**")
+            c1,c2,c3 = st.columns([1,2,2])
+            qtdf  = c1.number_input("Qtd/fase",1,4,3,key=f"{pfx}_qtdf")
+            famf  = c2.selectbox("Família",list(CABOS_BT.keys()),key=f"{pfx}_famf")
+            cabof = c3.selectbox("Cabo",CABOS_BT[famf],key=f"{pfx}_cabof")
+            t_f   = float(TRACAO_CONV.get(cabof,0))*qtdf
+            st.markdown("**Neutro**")
+            c4,c5 = st.columns(2)
+            famn  = c4.selectbox("Família",list(CABOS_BT.keys()),key=f"{pfx}_famn")
+            cabon = c5.selectbox("Cabo",CABOS_BT[famn],key=f"{pfx}_cabon")
+            t_n   = float(TRACAO_CONV.get(cabon,0))
+            st.markdown("**Controle**")
+            c6,c7 = st.columns(2)
+            famc  = c6.selectbox("Família",list(CABOS_BT.keys()),key=f"{pfx}_famc")
+            caboc = c7.selectbox("Cabo",CABOS_BT[famc],key=f"{pfx}_caboc")
+            t_c   = float(TRACAO_CONV.get(caboc,0))
+            t = t_f+t_n+t_c
+            st.caption(f"Fase {t_f:.0f} + Neutro {t_n:.0f} + Ctrl {t_c:.0f} = **{t:.0f} daN**")
+            nome = "BT Conv"
+        elif tipo == "Pré-Reunido BT (PB)":
+            c1,c2 = st.columns(2)
+            cabo = c1.selectbox("Cabo",list(TRACAO_PB.keys()),key=f"{pfx}_cabo")
+            vao  = c2.select_slider("Vão (m)",VOS_PB,value=20,key=f"{pfx}_vao")
+            t    = interp(TRACAO_PB[cabo],vao); nome = "PB"
+        elif tipo == "CAZ / CAW":
+            c1,c2 = st.columns(2)
+            cabo = c1.selectbox("Cabo",list(TRACAO_CAZ.keys()),key=f"{pfx}_cabo")
+            vao  = c2.select_slider("Vão (m)",VOS_CAZ,value=100,key=f"{pfx}_vao")
+            t    = interp(TRACAO_CAZ[cabo],vao); nome = "CAZ"
+        st.caption(f"⚡ Tração: **{t:.0f} daN**")
+        return float(t), nome
+
+    def painel_nivel(titulo, idx, alt_default, af, altura_poste, is_bt=False, fixo_alt=False):
+        with st.container(border=True):
+            st.markdown(f"**{titulo}**")
+            if fixo_alt:
+                alt_est = float(alt_default)
+                st.info(f"Altura estimada: **{alt_est:.2f} m**")
+            else:
+                alt_est = st.number_input("Altura estimada (m)", 0.0, float(altura_poste), alt_default, key=f"{idx}_alt")
+            ang = st.select_slider("Ângulo (α)", ANGULOS, value=0, key=f"{idx}_ang")
+            if is_bt:
+                tracao, nome_tipo = w_cabo_bt(idx)
+            else:
+                tracao, nome_tipo = w_cabo_at(idx)
+            if af == 0:
+                st.error("Erro: AF é zero.")
+                return 0.0, 0.0, 0.0
+            fr = (alt_est / af) * tracao
+            st.caption(f"⚡ Força resultante: **{fr:.0f} daN**")
+            fx = fr * math.cos(math.radians(ang))
+            fy = fr * math.sin(math.radians(ang))
+        return fx, fy, fr
+
+    # ── INTERFACE DA CALCULADORA ───────────────────────────────────────────────
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#1a2332,#0d1117);border-bottom:2px solid #f6a800;
+                padding:16px 20px;border-radius:8px;margin-bottom:16px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:#fff">
+        🏗️ Esforços Mecânicos em Postes
+      </div>
+      <div style="font-size:0.75rem;color:#8b949e;margin-top:3px">
+        Conforme DIS-NOR-012 e DIS-NOR-014 — Neoenergia Elektro
+      </div>
     </div>
-    <div class="mb">
-      <div id="lista-formularios"><p class="sem-registros">Carregando...</p></div>
-    </div>
-  </div>
-</div>
+    """, unsafe_allow_html=True)
 
-<div id="tc"></div>
+    col_conf1, col_conf2 = st.columns(2)
+    altura_poste = col_conf1.selectbox("📏 Altura do poste (m)", list(ALTURA_FINAL.keys()), index=2)
+    classe_poste = col_conf2.selectbox("💪 Classe do poste (daN)", [150,200,300,400,600,1000,1500,2000,3000,4000], index=3)
 
-<script>
-// ── TENSÃO MUTUAMENTE EXCLUSIVA ──
-document.getElementById('tensao_345_chk').addEventListener('change', function() {
-  if (this.checked) document.getElementById('tensao_138_chk').checked = false;
-});
-document.getElementById('tensao_138_chk').addEventListener('change', function() {
-  if (this.checked) document.getElementById('tensao_345_chk').checked = false;
-});
+    af_poste  = ALTURA_FINAL.get(altura_poste, 0.0)
+    alt_util  = af_poste
 
-// ── TOGGLES DE PERÍODO ──
-document.querySelectorAll('.periodo-toggle .btn-toggle').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    var container = this.closest('.periodo-toggle');
-    var hidden = document.getElementById('periodo_execucao');
-    container.querySelectorAll('.btn-toggle').forEach(function(x) { x.classList.remove('ativo'); });
-    this.classList.add('ativo');
-    if (hidden) hidden.value = this.dataset.value;
-  });
-});
+    st.info(f"**Altura de transferência (AF):** {af_poste:.2f} m  —  poste de {altura_poste} m")
+    st.divider()
 
-// ── TELEFONE — só números, foco automático ──
-// ── CALCULADORA DE ORÇAMENTO SIGFI ──────────────────────────────────────────
-function formatarMoedaBR(valor) {
-  return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+    # ── REDE PRIMÁRIA ──────────────────────────────────────────────────────────
+    st.markdown("### 🔌 Rede Primária")
+    fx1, fy1, mag1 = painel_nivel("1º Nível", "n1", altura_poste - 1.0, af_poste, altura_poste, fixo_alt=True)
 
-var MO_RETIRADA    = { 30: 1023.17, 80: 1151.00, 120: 1278.97, 180: 1278.97 };
-var MO_INSTALACAO  = { 80: 6020.61, 120: 7129.66, 180: 8070.83 };
-var MATERIAL_INST  = { 80: 27386.28, 120: 34268.51, 180: 48494.16 };
-var BASE_SIGFI_PU  = [30, 80];   // PU = sem custo
-var BASE_SIGFI_PC  = [120, 180]; // PC = com custo
+    tem_n2 = st.checkbox("Possui 2º nível de rede primária", key="cb_n2")
+    if tem_n2:
+        fx2, fy2, mag2 = painel_nivel("2º Nível", "n2", altura_poste - 2.0, af_poste, altura_poste)
+    else:
+        fx2, fy2, mag2 = 0.0, 0.0, 0.0
 
-function calcularOrcamentoSIGFI() {
-  // Lê tipo de solicitação: ligacao_nova_fv (sim/nao/na) + alteracao_carga_fv
-  var tipoLN  = document.querySelector('input[name="ligacao_nova_fv"]:checked');
-  var tipoAlt = document.querySelector('input[name="alteracao_carga_fv"]:checked');
-  var sigfiAtual   = document.querySelector('[name="sigfi_atual"]')?.value || '';
-  var sigfiPedido  = document.querySelector('[name="sigfi_alteracao"]')?.value || '';
+    st.divider()
 
-  var resultado   = document.getElementById('sigfi-resultado');
-  var badge       = document.getElementById('sigfi-status-badge');
-  var detalhes    = document.getElementById('sigfi-detalhes');
+    # ── REDE SECUNDÁRIA ────────────────────────────────────────────────────────
+    st.markdown("### 🔋 Rede Secundária — BT")
+    tem_sec = st.checkbox("Possui rede secundária (BT)", key="cb_sec")
+    if tem_sec:
+        fx_s, fy_s, mag_s = painel_nivel("Secundária BT", "sec", max(0.0, alt_util - 3.0), af_poste, altura_poste, is_bt=True)
+    else:
+        fx_s, fy_s, mag_s = 0.0, 0.0, 0.0
 
-  resultado.style.display = 'flex';
+    st.divider()
 
-  // Validações
-  if (!sigfiPedido || sigfiPedido === '') {
-    badge.textContent = '⚠️ Selecione o Novo SIGFI acima';
-    badge.style.background = '#fef9c3'; badge.style.color = '#92400e';
-    detalhes.style.display = 'none';
-    return;
-  }
+    # ── RESULTADO ──────────────────────────────────────────────────────────────
+    st.markdown("### 📊 Resultado Final")
 
-  var pedidoNum = parseInt(sigfiPedido);
-  var atualNum  = parseInt(sigfiAtual) || 0;
+    rx  = fx1 + fx2 + fx_s
+    ry  = fy1 + fy2 + fy_s
+    mag = math.sqrt(rx**2 + ry**2)
+    ang_res = math.degrees(math.atan2(ry, rx)) % 360
+    margem  = classe_poste - mag
 
-  // Ligação Nova → sempre sem custo
-  var ehLigacaoNova = (tipoLN && tipoLN.value === 'sim') || sigfiAtual === 'Ligação Nova';
-  if (ehLigacaoNova) {
-    badge.textContent = '✅ SEM CUSTO AO CLIENTE — Ligação Nova';
-    badge.style.background = '#f0fdf4'; badge.style.color = '#15803d';
-    badge.style.border = '1px solid #bbf7d0';
-    detalhes.style.display = 'none';
-    return;
-  }
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("1º Nível (daN)",   f"{mag1:.1f}")
+    c2.metric("2º Nível (daN)",   f"{mag2:.1f}" if tem_n2  else "—")
+    c3.metric("Secundária (daN)", f"{mag_s:.1f}" if tem_sec else "—")
+    c4.metric("Resultante (daN)", f"{mag:.1f}", delta=f"Margem: {margem:+.0f} daN",
+              delta_color="normal" if margem >= 0 else "inverse")
 
-  // SIGFI pedido PU → sem custo
-  if (BASE_SIGFI_PU.includes(pedidoNum)) {
-    badge.textContent = '✅ SEM CUSTO AO CLIENTE — SIGFI ' + pedidoNum + ' (PU)';
-    badge.style.background = '#f0fdf4'; badge.style.color = '#15803d';
-    badge.style.border = '1px solid #bbf7d0';
-    detalhes.style.display = 'none';
-    return;
-  }
+    if margem >= 0:
+        st.success(f"✅ **Aprovado** — Poste {int(altura_poste)} m / {classe_poste} daN suporta com margem de **{margem:.1f} daN** · Direção: {ang_res:.1f}°")
+    else:
+        CLASSES = [150,200,300,400,600,1000,1500,2000,3000,4000]
+        prox = next((c for c in CLASSES if c >= mag), None)
+        st.error(f"🔴 **Reprovado** — Excede em **{abs(margem):.1f} daN**." +
+                 (f" Use classe **{prox} daN**." if prox else ""))
 
-  // SIGFI pedido PC → calcula
-  if (BASE_SIGFI_PC.includes(pedidoNum)) {
-    var moRet    = MO_RETIRADA[atualNum]   || 0;
-    var moInst   = MO_INSTALACAO[pedidoNum] || 0;
-    var material = MATERIAL_INST[pedidoNum] || 0;
-    var total    = moRet + moInst + material;
+    with st.expander("📐 Fórmulas utilizadas (DIS-NOR-012 / DIS-NOR-014)"):
+        st.markdown(f"""
+**Transferência de altura (6.13.4):**
+> Fr = (AI / AF) × TI
+> - AI = altura estimada do nível
+> - AF = altura final (0,10 m do topo) → poste {int(altura_poste)} m = **{af_poste:.2f} m**
+> - TI = tração do cabo
 
-    badge.textContent = '💰 COM CUSTO AO CLIENTE — SIGFI ' + pedidoNum + ' (PC)';
-    badge.style.background = '#fef2f2'; badge.style.color = '#dc2626';
-    badge.style.border = '1px solid #fecaca';
+**Resultante (6.13.6):**
+> R = √(Fx² + Fy²)
+> - Fx = Fr × cos(α) · Fy = Fr × sen(α)
 
-    document.getElementById('val-mo-ret').textContent   = formatarMoedaBR(moRet);
-    document.getElementById('val-mo-inst').textContent  = formatarMoedaBR(moInst);
-    document.getElementById('val-material').textContent = formatarMoedaBR(material);
-    document.getElementById('val-total').textContent    = formatarMoedaBR(total);
-    detalhes.style.display = 'block';
-    return;
-  }
-
-  // SIGFI inválido
-  badge.textContent = '⚠️ SIGFI ' + sigfiPedido + ' não reconhecido para orçamento';
-  badge.style.background = '#fef9c3'; badge.style.color = '#92400e';
-  badge.style.border = '1px solid #fde68a';
-  detalhes.style.display = 'none';
-}
-// ── FIM CALCULADORA SIGFI ────────────────────────────────────────────────────
-
-document.querySelectorAll('.ci-ddd').forEach(function(ddd) {
-  ddd.addEventListener('input', function() {
-    this.value = this.value.replace(/\D/g, '').slice(0, 2);
-    if (this.value.length === 2) {
-      var tel = this.parentElement.querySelector('.ci-tel');
-      if (tel) tel.focus();
-    }
-  });
-});
-document.querySelectorAll('.ci-tel').forEach(function(tel) {
-  tel.addEventListener('input', function() {
-    this.value = this.value.replace(/\D/g, '').slice(0, 9);
-  });
-});
-
-// ── MAIÚSCULAS em texto ──
-document.querySelectorAll('.ci, .cta').forEach(function(el) {
-  if (el.type === 'number' || el.type === 'date' || el.type === 'time') return;
-  el.addEventListener('input', function() {
-    var pos = this.selectionStart;
-    this.value = this.value.toUpperCase();
-    try { this.setSelectionRange(pos, pos); } catch(e){}
-  });
-});
-
-// ── RADIO: remove destaque amarelo ao responder ──
-document.querySelectorAll('input[type=radio]').forEach(function(radio) {
-  radio.addEventListener('change', function() {
-    var container = this.closest('.csn, .csn-num');
-    if (container) container.classList.remove('sem-resposta-aviso');
-  });
-});
-
-// ── REGRA FOTOVOLTAICA ──
-document.querySelectorAll('input[name="ligacao_nova_fv"]').forEach(function(radio) {
-  radio.addEventListener('change', function() {
-    var radiosAlt = document.querySelectorAll('input[name="alteracao_carga_fv"]');
-    var blocoAlt  = document.querySelector('input[name="alteracao_carga_fv"]').closest('.bloco-fv');
-    if (this.value === 'sim' && this.checked) {
-      radiosAlt.forEach(function(r) { r.checked = (r.value === 'na'); r.disabled = (r.value !== 'na'); });
-      blocoAlt.querySelectorAll('label.ls, label.ln').forEach(function(l) {
-        l.style.opacity = '0.3'; l.style.cursor = 'not-allowed'; l.style.pointerEvents = 'none';
-      });
-      blocoAlt.style.opacity = '0.65';
-    } else {
-      radiosAlt.forEach(function(r) { r.disabled = false; });
-      blocoAlt.querySelectorAll('label').forEach(function(l) {
-        l.style.opacity = ''; l.style.cursor = ''; l.style.pointerEvents = '';
-      });
-      blocoAlt.style.opacity = '';
-    }
-  });
-});
-
-// ═══════════════════════════════════════════════════════
-// PERSISTÊNCIA — localStorage (compatível com qualquer
-// ambiente, incluindo Python via arquivo local)
-// ═══════════════════════════════════════════════════════
-
-function coletarDados() {
-  var form = document.getElementById('form-viabilidade');
-  var fd = new FormData(form);
-  var dados = {};
-  for (var pair of fd.entries()) dados[pair[0]] = pair[1];
-  // tensão checkboxes (FormData não pega desmarcados)
-  dados.tensao_345_chk = document.getElementById('tensao_345_chk').checked ? 'sim' : '';
-  dados.tensao_138_chk = document.getElementById('tensao_138_chk').checked ? 'sim' : '';
-  dados.periodo_execucao = document.getElementById('periodo_execucao').value || '';
-  return dados;
-}
-
-function preencherFormulario(dados) {
-  Object.keys(dados).forEach(function(k) {
-    if (k === 'id' || k === 'nome_arquivo') return;
-    if (k === 'tensao_345_chk') { document.getElementById('tensao_345_chk').checked = dados[k]==='sim'; return; }
-    if (k === 'tensao_138_chk') { document.getElementById('tensao_138_chk').checked = dados[k]==='sim'; return; }
-    if (k === 'periodo_execucao') {
-      var hidden = document.getElementById('periodo_execucao');
-      if (hidden) hidden.value = dados[k] || '';
-      document.querySelectorAll('.periodo-toggle .btn-toggle').forEach(function(b) {
-        b.classList.remove('ativo');
-        if (dados[k] && b.dataset.value === dados[k]) b.classList.add('ativo');
-      });
-      return;
-    }
-    var el = document.querySelector('[name="' + k + '"]');
-    if (!el) return;
-    if (el.type === 'radio') {
-      var radio = document.querySelector('[name="' + k + '"][value="' + dados[k] + '"]');
-      if (radio) radio.checked = true;
-    } else {
-      el.value = dados[k];
-    }
-  });
-  fecharModal('modal-lista');
-}
-
-function salvarFormulario() {
-  var nomeCliente = document.querySelector('[name="nome_cliente"]').value || '';
-  var sugestao = nomeCliente || 'Formulário';
-  var nomeArquivo = prompt('📁 Como deseja nomear este registro?', sugestao);
-  if (nomeArquivo === null) return;
-  var dados = coletarDados();
-  dados.id = Date.now();
-  dados.nome_arquivo = (nomeArquivo.trim() || sugestao).toUpperCase();
-  var lista = JSON.parse(localStorage.getItem('formularios') || '[]');
-  lista.push(dados);
-  localStorage.setItem('formularios', JSON.stringify(lista));
-  mostrarToast('✅ Salvo: ' + dados.nome_arquivo, 'sucesso');
-}
-
-function carregarLista() {
-  var lista = JSON.parse(localStorage.getItem('formularios') || '[]');
-  var div = document.getElementById('lista-formularios');
-  if (!lista.length) { div.innerHTML = '<p class="sem-registros">Nenhum formulário salvo ainda.</p>'; return; }
-  div.innerHTML = lista.slice().reverse().map(function(item) {
-    var nome = item.nome_arquivo || item.nome_cliente || 'Sem nome';
-    var data = item.data || 'Sem data';
-    var proj = item.projetista1 || '';
-    var id = item.id;
-    return '<div class="lista-item"><div class="lista-info"><div class="lista-cliente">' + nome +
-      '</div><div class="lista-data">' + data + (proj ? ' · ' + proj : '') +
-      '</div></div><div class="lista-acoes">' +
-      '<button class="btn btn-sm btn-carregar" onclick="carregarItem(' + id + ')">Abrir</button> ' +
-      '<button class="btn btn-sm btn-deletar" onclick="deletarItem(' + id + ')">Excluir</button>' +
-      '</div></div>';
-  }).join('');
-}
-
-function carregarItem(id) {
-  var lista = JSON.parse(localStorage.getItem('formularios') || '[]');
-  var item = lista.find(function(f) { return f.id === id; });
-  if (item) preencherFormulario(item);
-}
-
-function deletarItem(id) {
-  if (!confirm('Excluir permanentemente?')) return;
-  var lista = JSON.parse(localStorage.getItem('formularios') || '[]');
-  lista = lista.filter(function(f) { return f.id !== id; });
-  localStorage.setItem('formularios', JSON.stringify(lista));
-  carregarLista();
-  mostrarToast('🗑️ Excluído.', 'aviso');
-}
-
-function abrirModal(id) {
-  document.getElementById(id).classList.add('ativo');
-  if (id === 'modal-lista') carregarLista();
-}
-function fecharModal(id) { document.getElementById(id).classList.remove('ativo'); }
-
-function novoFormulario() {
-  if (!confirm('Limpar o formulário atual?')) return;
-  document.getElementById('form-viabilidade').reset();
-  document.getElementById('tensao_345_chk').checked = false;
-  document.getElementById('tensao_138_chk').checked = false;
-  document.querySelectorAll('.btn-toggle').forEach(function(b) { b.classList.remove('ativo'); });
-  document.getElementById('periodo_execucao').value = '';
-  document.querySelectorAll('.sem-resposta-aviso').forEach(function(el) { el.classList.remove('sem-resposta-aviso'); });
-  mostrarToast('📋 Novo formulário.', 'info');
-}
-
-function mostrarToast(msg, tipo) {
-  var c = document.getElementById('tc'); if (!c) return;
-  var t = document.createElement('div');
-  t.className = 'toast toast-' + (tipo || 'info'); t.textContent = msg;
-  c.appendChild(t);
-  requestAnimationFrame(function() { t.classList.add('visivel'); });
-  setTimeout(function() { t.classList.remove('visivel'); setTimeout(function() { t.remove(); }, 400); }, 3500);
-}
-
-// ── GERAR PDF ──
-function gerarPDF() {
-  var form = document.getElementById('form-viabilidade');
-  var radiosGrupos = {};
-  form.querySelectorAll('input[type=radio]').forEach(function(r) {
-    if (!radiosGrupos[r.name]) radiosGrupos[r.name] = false;
-    if (r.checked) radiosGrupos[r.name] = true;
-  });
-  var semResposta = Object.entries(radiosGrupos).filter(function(e) { return !e[1]; });
-  if (semResposta.length > 0) {
-    document.querySelectorAll('.sem-resposta-aviso').forEach(function(el) { el.classList.remove('sem-resposta-aviso'); });
-    semResposta.forEach(function(e) {
-      var el = form.querySelector('[name="' + e[0] + '"]');
-      var container = el ? el.closest('.csn, .csn-num') : null;
-      if (container) container.classList.add('sem-resposta-aviso');
-    });
-    var primeira = document.querySelector('.sem-resposta-aviso');
-    if (primeira) primeira.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (!confirm('⚠️ ' + semResposta.length + ' pergunta(s) sem resposta (destacadas em laranja).\n\nGerar o PDF mesmo assim?')) return;
-  }
-  document.querySelectorAll('.sem-resposta-aviso').forEach(function(el) { el.classList.remove('sem-resposta-aviso'); });
-
-  var { jsPDF } = window.jspdf;
-  var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  var fd = new FormData(form);
-  var v = function(name) { return fd.get(name) || '-'; };
-  var t = function(ddd, tel) { return (fd.get(ddd) && fd.get(tel)) ? '(' + fd.get(ddd) + ') ' + fd.get(tel) : (fd.get(tel) || '-'); };
-
-  var tensao = '';
-  if (document.getElementById('tensao_345_chk').checked) tensao = '34,5kV';
-  else if (document.getElementById('tensao_138_chk').checked) tensao = '13,8kV';
-  else tensao = '-';
-
-  var linhaVivaVal = v('linha_viva').toUpperCase();
-
-  var dadosOrdenados = [
-    ['NOME DO CLIENTE', v('nome_cliente')],
-    ['CÓDIGO DO PROJETO', v('codigo_projeto')],
-    ['TELEFONE DO CLIENTE', t('ddd_cliente','telefone_cliente')],
-    ['DATA', v('data')],
-    ['PROJETISTA 1', v('projetista1')],
-    ['TELEFONE PROJETISTA 1', t('ddd_projetista','telefone_projetista')],
-    ['PROJETISTA 2', v('projetista2')],
-    ['TELEFONE PROJETISTA 2', t('ddd_projetista2','telefone_projetista2')],
-    ['TENSÃO DA REDE', tensao],
-    ['LINHA VIVA', linhaVivaVal],
-    ['LIGAÇÃO NOVA FV', v('ligacao_nova_fv')],
-    ['ALTERAÇÃO CARGA FV', v('alteracao_carga_fv')],
-    ['SIGFI ATUAL', v('sigfi_atual')],
-    ['NOVO SIGFI', v('sigfi_alteracao')],
-    ['MODELO ATERRAMENTO', v('modelo_aterramento')],
-    ['OBS ATERRAMENTO', v('obs_aterramento')],
-    ['FOTOS OBRIGATÓRIAS', v('foto_obrigatoria')],
-    ['MANOBRA', v('manobra')],
-    ['BIG JUMPER', v('big_jumper')],
-    ['BT ENERGIZADO', v('bt_energizado')],
-    ['ESTRUTURA IMPEDE LV', v('proj_estrutura_trabalhar')],
-    ['ESTRUTURA CANADENSE', v('estrutura_canadense')],
-    ['FIO CAZ / CABO 06', v('fio_caz')],
-    ['POSTE PODRE', v('poste_podre')],
-    ['CHAVE FACA PROVISÓRIA', v('cf_provisoria')],
-    ['RISCO EMINENTE', v('risco_eminente')],
-    ['PRAZO EXECUÇÃO', v('prazo_risco')],
-    ['PERÍODO EXECUÇÃO', v('periodo_execucao')],
-    ['TROCAR MEDIDORES', v('trocar_medidores')],
-    ['MEDIDOR LIGADO', v('medidor_ligado')],
-    ['Nº MEDIDOR', v('num_medidor')],
-    ['RETAGUARDA', v('cc_reta_guarda')],
-    ['Nº CLIENTES', v('num_clientes')],
-    ['DIST. CIRCUITOS', v('sinalizou_dist_circuitos')],
-    ['DISTRIBUIR POSTES', v('distribuir_postes')],
-    ['APOIO DISTRIBUIÇÃO', v('apoio_distribuicao')],
-    ['SINALIZA TRÂNSITO', v('sinaliza_transito')],
-    ['SINAL CELULAR', v('sinal_celular')],
-    ['ACESSO CHUVA', v('acesso_chuva')],
-    ['ACESSO CAMINHÃO', v('acesso_caminhao')],
-    ['PORTEIRA CADEADA', v('porteira_cadeada')],
-    ['NOME DE RUA', v('possui_nome_rua')],
-    ['CAIXA DERIVAÇÃO', v('apoio_caixa')],
-    ['TUBULAÇÃO SUBTERRÂNEA', v('apoio_tubulacao')],
-    ['REDE IP', v('verificou_rede_ip')],
-    ['TELEFÔNICA', v('telefonica')],
-    ['FIO DROPS', v('apoio_drops')],
-    ['FIBRA ÓPTICA', v('apoio_fibra')],
-    ['PODA QTD', v('amb_poda_qtd')],
-    ['CORTE QTD', v('amb_corte_qtd')],
-    ['AUT. PODA', v('aut_prop_poda')],
-    ['AUT. CORTE', v('aut_prop_corte')],
-    ['AUT. PASSAGEM', v('autorizacao_passagem')],
-    ['LOTEAMENTO', v('loteamento')],
-    ['TRAVESSIA/OCUPAÇÃO', v('travessia_ocup')],
-    ['FORMULÁRIO OCUPAÇÃO', v('formular_ocupar')],
-    ['APP', v('amb_app')],
-    ['UNIDADE CONSERVAÇÃO', v('amb_unidade_conservacao')],
-    ['LICENÇA AMBIENTAL', v('licenca_ambiental')],
-    ['ABERTURA FAIXA', v('amb_abertura_faixa')],
-    ['LOCAL INTERVENÇÃO', v('intervencao_em')],
-    ['TERRENO 3º', v('padrao_terreno_3')],
-    ['ABELHA POSTE', v('abelha_poste')],
-    ['CAVA ROCHA', v('cava_rocha')],
-    ['CAVA PROFUNDA', v('cava_profunda')],
-    ['TUBULAÇÃO GÁS', v('tubulacao_gas')],
-    ['PIQUETE/SPRAY', v('piquetespray')],
-    ['REPARO CALÇADA', v('reparo_calcada')],
-    ['REPARO ESPECIAL', v('reparo_calcada_especial')],
-    ['CERCAS DXF', v('indicado_dxf')],
-    ['ELOS MONT./JUST.', v('efeito_montante_jusante')],
-    ['DESC. CERCAS', v('indicacao_cercas_dxf')],
-    ['SUBST. TRAFO', v('substituir_trafo')],
-    ['SUBST. BARRAMENTO', v('barramento')],
-    ['LIG. CHAVE/PARA-RAIO', v('ligacao_cc_pr')],
-    ['PINTAR CONF/TOMB', v('pintar_conf_tomb')],
-    ['GLV', v('possui_glv')],
-    ['PROTETOR BUCHA', v('instalar_protetor')],
-    ['ADEQUAÇÃO', v('verificado_adequacao')],
-    ['DOAR PADRÃO', v('doar_padrao')],
-  ];
-
-  var anotacoes = v('anotacoes');
-  var lv = linhaVivaVal === 'SIM';
-
-  // HEADER
-  doc.setFillColor(22,101,52); doc.rect(0,0,297,12,'F');
-  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(11);
-  doc.text('FORMULÁRIO DE VIABILIDADE TÉCNICA — EKT ENGENHARIA',148.5,6,{align:'center'});
-  doc.setFontSize(7);
-  doc.text('Neoenergia Elektro · EKT-FRG-EXE-001 · Rev.06',148.5,10,{align:'center'});
-
-  if (lv) {
-    doc.setFillColor(220,38,38); doc.rect(0,12,297,7,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(9);
-    doc.text('⚠  ATENÇÃO: LINHA VIVA CONFIRMADA NESTA OBRA  ⚠',148.5,17,{align:'center'});
-  }
-
-  var colW = (297-14)/5;
-  var camposVermelhos = ['LINHA VIVA','ESTRUTURA IMPEDE LV','ESTRUTURA CANADENSE','FIO CAZ / CABO 06','POSTE PODRE','RISCO EMINENTE'];
-
-  var tableData = [];
-  for (var i=0; i<dadosOrdenados.length; i+=5) {
-    var row = [];
-    for (var j=0; j<5; j++) {
-      var item = dadosOrdenados[i+j];
-      row.push(item ? item[0]+': '+item[1] : '');
-    }
-    tableData.push(row);
-  }
-  var truncar = function(str, max) { return str.length>max ? str.substring(0,max)+'…' : str; };
-  var tableDataFinal = tableData.map(function(row) {
-    return row.map(function(cell) {
-      if (!cell) return '';
-      var sep = cell.indexOf(': ');
-      if (sep===-1) return cell;
-      return cell.substring(0,sep+2)+truncar(cell.substring(sep+2),38);
-    });
-  });
-
-  var startY = lv ? 20 : 14;
-
-  doc.autoTable({
-    startY: startY, body: tableDataFinal, theme: 'grid', tableWidth: 'wrap',
-    styles:{ fontSize:5.8, cellPadding:1.2, overflow:'ellipsize', textColor:[30,30,30], fontStyle:'bold', cellWidth:'wrap' },
-    columnStyles:{ 0:{cellWidth:colW}, 1:{cellWidth:colW}, 2:{cellWidth:colW}, 3:{cellWidth:colW}, 4:{cellWidth:colW} },
-    margin:{ left:7, right:7 },
-    didParseCell: function(data) {
-      if (data.section!=='body'||!data.cell.raw) return;
-      var txt = data.cell.raw.toString().toUpperCase();
-      var temSim = txt.includes(': SIM');
-      var temNao = txt.includes(': NAO')||txt.includes(': NÃO');
-      var ehVermelho = camposVermelhos.some(function(c){ return txt.startsWith(c); });
-      if (ehVermelho && temSim) { data.cell.styles.textColor=[180,0,0]; data.cell.styles.fillColor=[255,235,235]; }
-      else if (temSim) { data.cell.styles.textColor=[0,110,0]; }
-      else if (temNao) { data.cell.styles.textColor=[180,0,0]; }
-    }
-  });
-
-  // ANOTAÇÕES
-  var larguraUtil = 297-14;
-  var yApos = doc.lastAutoTable.finalY+1;
-  var yFim = 203; var altBody = yFim-yApos-5.5;
-  doc.setFillColor(22,101,52); doc.rect(7,yApos,larguraUtil,5.5,'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(255,255,255);
-  doc.text('ANOTAÇÕES GERAIS',10,yApos+4);
-  doc.setFillColor(255,255,255); doc.setDrawColor(180,180,180); doc.setLineWidth(0.25);
-  doc.rect(7,yApos+5.5,larguraUtil,altBody,'FD');
-  var textoNota = (anotacoes && anotacoes!=='-') ? anotacoes : '(sem anotações)';
-  var linhasNota = doc.splitTextToSize(textoNota, larguraUtil-8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(30,30,30);
-  doc.text(linhasNota, 10, yApos+10);
-
-  // RODAPÉ
-  var totalPags = doc.getNumberOfPages();
-  for (var p=1; p<=totalPags; p++) {
-    doc.setPage(p); doc.setFontSize(7); doc.setTextColor(150,150,150);
-    doc.text('Documento Interno EKT · Pág. '+p+'/'+totalPags,148.5,208,{align:'center'});
-    if (lv) {
-      doc.setFillColor(220,38,38); doc.rect(240,198,57,12,'F');
-      doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
-      doc.text('⚠ LINHA VIVA',268.5,205,{align:'center'});
-    }
-  }
-
-  doc.save('Viabilidade_'+(v('codigo_projeto')!=='-'?v('codigo_projeto'):'EKT')+'.pdf');
-}
-
-// ── SALVAR JPG ──
-function salvarJPG() {
-  var wrap = document.querySelector('.wrap');
-  html2canvas(wrap, {
-    scale:2, useCORS:true, backgroundColor:'#f8fafc',
-    scrollX:0, scrollY:0, windowWidth:wrap.scrollWidth, windowHeight:wrap.scrollHeight,
-    onclone: function(doc) { doc.querySelector('.wrap').style.overflow='visible'; }
-  }).then(function(canvas) {
-    canvas.toBlob(function(blob) {
-      var url = URL.createObjectURL(blob);
-      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        window.open(url,'_blank');
-      } else {
-        var a = document.createElement('a'); a.href=url;
-        var cod = document.querySelector('[name="codigo_projeto"]').value||'EKT';
-        a.download='Viabilidade_'+cod+'.jpg'; a.click();
-      }
-      URL.revokeObjectURL(url);
-    },'image/jpeg',0.92);
-  }).catch(function(err){ alert('Erro ao gerar imagem: '+err.message); });
-}
-</script>
-</body>
-</html>
+**Tangente com mesmo cabo:** forças opostas iguais se cancelam → R = 0
+        """)
